@@ -29,7 +29,7 @@ steps:
   - uses: actions/checkout@v4
 
   - name: Run feeds-aggregator
-    uses: chensoul/chensoul.github.io/feeds-aggregator@main
+    uses: chensoul/feeds-aggregator@main
     with:
       sources: data/rss.txt          # 相对工作区的 RSS 列表路径（默认）
       output: data/feeds.json       # 输出路径（默认）
@@ -51,6 +51,7 @@ steps:
 | `maxItemsPerFeed` | 否 | `0` | 每个 RSS 源最多取几条（0=不限制） |
 | `maxTotalItems` | 否 | `0` | 输出总条数上限（0=不限制） |
 | `dedup` | 否 | `true` | 是否按 link 去重 |
+| `requestTimeout` | 否 | `30s` | 单次 HTTP 请求超时（如 30s、1m） |
 
 ### 发布到 Action 市场
 
@@ -58,7 +59,7 @@ steps:
 2. 在 GitHub 仓库 **Settings → Actions → General** 中允许该仓库的 Action 被其他仓库使用。
 3. 若要上架 [GitHub Marketplace](https://github.com/marketplace?type=actions)，在 **Releases** 中创建 Release 并勾选 “Publish to GitHub Marketplace”，按提示填写描述与分类。
 
-他人引用示例：`uses: your-org/your-repo/feeds-aggregator@v1`
+他人引用示例：`uses: chensoul/feeds-aggregator@v1`
 
 ---
 
@@ -67,7 +68,6 @@ steps:
 首次使用建议在 `feeds-aggregator` 目录执行 `go mod tidy` 生成 `go.sum`（CI 中会自动拉取依赖）。
 
 ```bash
-cd feeds-aggregator
 go mod tidy   # 可选，用于生成 go.sum
 go run . -sources=data/rss.txt -output=data/feeds.json
 ```
@@ -130,7 +130,3 @@ https://third.com/rss
 ```
 
 前端会解析并按「今年内相对时间、往年绝对日期」展示。
-
-## GitHub Action
-
-仓库中的 `.github/workflows/feeds-sync.yml` 会按计划（或手动）运行本程序。若使用默认路径，需维护 `data/rss.txt` 并将生成的 `data/feeds.json` 提交；也可在 workflow 中通过 inputs 覆盖为其他路径（如本博客使用 `public/data/feeds.json`）。

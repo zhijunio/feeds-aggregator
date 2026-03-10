@@ -32,7 +32,7 @@ const (
 	defaultRequestTimeout = 30 * time.Second
 	defaultLogRetention  = 7
 	datetimeLayout       = "2006-01-02 15:04:05"
-	userAgent            = "FeedsAggregator/1.0 (+https://github.com/chensoul/chensoul.github.io)"
+	userAgent            = "FeedsAggregator/1.0 (+https://github.com/chensoul/feeds-aggregator)"
 )
 
 var requestTimeout = defaultRequestTimeout
