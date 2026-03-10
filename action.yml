@@ -45,6 +45,10 @@ inputs:
     description: "Deduplicate by link (true/false). When true, keeps the newest entry per link."
     required: false
     default: "true"
+  requestTimeout:
+    description: "HTTP request timeout per feed (e.g. 30s, 1m)"
+    required: false
+    default: "10s"
 
 outputs:
   output-path:
@@ -72,6 +76,7 @@ runs:
         MAXITEMSPERFEED: ${{ inputs.maxItemsPerFeed }}
         MAXTOTALITEMS: ${{ inputs.maxTotalItems }}
         DEDUP: ${{ inputs.dedup }}
+        REQUESTTIMEOUT: ${{ inputs.requestTimeout }}
       run: |
         set -e
         cd "$GITHUB_ACTION_PATH"
@@ -90,4 +95,5 @@ runs:
           -maxItemsPerFeed="${MAXITEMSPERFEED}" \
           -maxTotalItems="${MAXTOTALITEMS}" \
           -dedup="${DEDUP}" \
+          -requestTimeout="${REQUESTTIMEOUT}" \
           $LOG_ARGS

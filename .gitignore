@@ -1,3 +1,7 @@
 logs/
 feeds-aggregator
 *.exe
+
+.idea
+
+.DS_Store
