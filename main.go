@@ -205,6 +205,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("json encode: %v", err)
 	}
+	enc = append(enc, '\n')
 
 	if *outputPath == "" {
 		os.Stdout.Write(enc)
