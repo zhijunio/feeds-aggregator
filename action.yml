@@ -41,6 +41,10 @@ inputs:
     description: "Max total items in output (0 = unlimited). Applied after sort and dedup."
     required: false
     default: "0"
+  maxDays:
+    description: "Only keep items from the last N days (0 = no limit)"
+    required: false
+    default: "365"
   dedup:
     description: "Deduplicate by link (true/false). When true, keeps the newest entry per link."
     required: false
@@ -75,6 +79,7 @@ runs:
         LOGRETENTION: ${{ inputs.logretention }}
         MAXITEMSPERFEED: ${{ inputs.maxItemsPerFeed }}
         MAXTOTALITEMS: ${{ inputs.maxTotalItems }}
+        MAXDAYS: ${{ inputs.maxDays }}
         DEDUP: ${{ inputs.dedup }}
         REQUESTTIMEOUT: ${{ inputs.requestTimeout }}
       run: |
@@ -94,6 +99,7 @@ runs:
           -timezone="${TZ}" \
           -maxItemsPerFeed="${MAXITEMSPERFEED}" \
           -maxTotalItems="${MAXTOTALITEMS}" \
+          -maxDays="${MAXDAYS}" \
           -dedup="${DEDUP}" \
           -requestTimeout="${REQUESTTIMEOUT}" \
           $LOG_ARGS

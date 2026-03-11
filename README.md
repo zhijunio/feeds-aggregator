@@ -13,6 +13,7 @@
 - **排序**：按发布时间倒序，相同时按 link 稳定排序
 - **单源条数**：`-maxItemsPerFeed`（默认 0=不限制），先按发布时间排序再取最新 N 条
 - **总条数上限**：`-maxTotalItems`（默认 0=不限制），在排序、去重后截断，控制最终 JSON 大小
+- **抓取最近 N 天**：`-maxDays`（默认 365），只保留发布时间在最近 N 天内的条目；0 表示不按天数限制
 - **按 link 去重**：`-dedup`（默认 true），同一链接只保留一条（保留最新），避免多源重复
 - **请求超时**：`-requestTimeout`（默认 30s），可设为 1m 等
 - **运行统计**：结束时输出成功/失败源数、总条数、输出路径与耗时
@@ -50,6 +51,7 @@ steps:
 | `logretention`    | 否  | `7`               | 日志保留天数，超过的自动删除；0 表示不清理        |
 | `maxItemsPerFeed` | 否  | `0`               | 每个 RSS 源最多取几条（0=不限制）          |
 | `maxTotalItems`   | 否  | `0`               | 输出总条数上限（0=不限制）                |
+| `maxDays`         | 否  | `365`             | 只保留最近 N 天的条目（0=不限制）           |
 | `dedup`           | 否  | `true`            | 是否按 link 去重                   |
 | `requestTimeout`  | 否  | `10s`             | 单次 HTTP 请求超时（如 30s、1m）        |
 
@@ -93,6 +95,7 @@ go build -o feeds-aggregator .
 | `-logretention`    | `7`               | 日志保留最近 N 天，超期自动删除；0 表示不清理                 |
 | `-maxItemsPerFeed` | `0`               | 每个 RSS 源最多取几条（0=不限制）；会先按时间排序再取最新 N 条      |
 | `-maxTotalItems`   | `0`               | 输出中最多保留总条数（0=不限制），在排序、去重之后截断              |
+| `-maxDays`         | `365`             | 只保留最近 N 天内的条目（0=不限制）                        |
 | `-dedup`           | `true`            | 是否按 link 去重（保留首次出现即最新一条）                  |
 | `-requestTimeout`  | `10s`             | 单次 HTTP 请求超时（如 30s、1m）                    |
 

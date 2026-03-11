@@ -72,6 +72,7 @@ func main() {
 	timezone := flag.String("timezone", "", "IANA timezone for updated field (e.g. Asia/Shanghai), empty for local")
 	maxItemsPerFeed := flag.Int("maxItemsPerFeed", 0, "Max items to take per RSS source (0 = unlimited); when > 0, keeps latest entries only")
 	maxTotalItems := flag.Int("maxTotalItems", 0, "Max total items in output (0 = unlimited); applied after sort and dedup")
+	maxDays := flag.Int("maxDays", 365, "Only keep items from the last N days (0 = no limit)")
 	dedup := flag.Bool("dedup", true, "Deduplicate by link (keep newest)")
 	requestTimeoutStr := flag.String("requestTimeout", "10s", "HTTP request timeout per feed (e.g. 30s, 1m)")
 	flag.Parse()
@@ -131,7 +132,7 @@ func main() {
 		go func() {
 			defer wg.Done()
 			for s := range work {
-				items, err := fetchAndParse(s.URL, s.Category, *maxItemsPerFeed)
+				items, err := fetchAndParse(s.URL, s.Category, *maxItemsPerFeed, *maxDays)
 				results <- result{items: items, url: s.URL, err: err}
 				if err != nil {
 					log.Printf("ERROR [%s]: %v", s.URL, err)
@@ -608,7 +609,7 @@ func fetchWithBackoff(feedURL string) (*gofeed.Feed, error) {
 	return nil, fmt.Errorf("after %d retries: %w", maxRetries, lastErr)
 }
 
-func fetchAndParse(feedURL string, category string, maxItemsPerFeed int) ([]FeedItem, error) {
+func fetchAndParse(feedURL string, category string, maxItemsPerFeed int, maxDays int) ([]FeedItem, error) {
 	feed, err := fetchWithBackoff(feedURL)
 	if err != nil {
 		return nil, err
@@ -657,10 +658,21 @@ func fetchAndParse(feedURL string, category string, maxItemsPerFeed int) ([]Feed
 		}
 	}
 
+	cutoff := time.Time{}
+	if maxDays > 0 {
+		cutoff = time.Now().AddDate(0, 0, -maxDays)
+	}
 	var items []FeedItem
 	for _, it := range entries {
 		link := strings.TrimSpace(it.Link)
 		if link == "" {
+			continue
+		}
+		itemTime := it.PublishedParsed
+		if itemTime == nil {
+			itemTime = it.UpdatedParsed
+		}
+		if !cutoff.IsZero() && itemTime != nil && itemTime.Before(cutoff) {
 			continue
 		}
 		pub := ""
