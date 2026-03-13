@@ -74,6 +74,8 @@ func main() {
 	maxTotalItems := flag.Int("maxTotalItems", 0, "Max total items in output (0 = unlimited); applied after sort and dedup")
 	maxDays := flag.Int("maxDays", 365, "Only keep items from the last N days (0 = no limit)")
 	dedup := flag.Bool("dedup", true, "Deduplicate by link (keep newest)")
+	faviconDir := flag.String("faviconDir", "", "Download favicons to this directory (e.g. public/favicon); filename {domain}.{ext}. Empty = use remote URL.")
+	faviconPathPrefix := flag.String("faviconPathPrefix", "", "Path prefix for avatar in JSON (e.g. favicon). avatar = faviconPathPrefix + \"/\" + domain + ext. Empty = use faviconDir when set.")
 	requestTimeoutStr := flag.String("requestTimeout", "10s", "HTTP request timeout per feed (e.g. 30s, 1m)")
 	flag.Parse()
 
@@ -101,6 +103,19 @@ func main() {
 	}
 	if len(sources) == 0 {
 		log.Fatalf("no RSS URLs in sources file %q: use .txt (one URL per line or \"category,url\") or .opml", *sourcesPath)
+	}
+	if *faviconDir != "" {
+		if err := os.MkdirAll(*faviconDir, 0755); err != nil {
+			log.Fatalf("create favicon dir %q: %v", *faviconDir, err)
+		}
+	}
+	// 未单独设置 faviconPathPrefix 时，用 faviconDir 作为 JSON 中的路径前缀（兼容旧用法）
+	faviconPrefix := *faviconPathPrefix
+	if *faviconDir != "" && faviconPrefix == "" {
+		faviconPrefix = *faviconDir
+		if filepath.IsAbs(faviconPrefix) {
+			faviconPrefix = filepath.Base(faviconPrefix)
+		}
 	}
 
 	start := time.Now()
@@ -132,7 +147,7 @@ func main() {
 		go func() {
 			defer wg.Done()
 			for s := range work {
-				items, err := fetchAndParse(s.URL, s.Category, *maxItemsPerFeed, *maxDays)
+				items, err := fetchAndParse(s.URL, s.Category, *maxItemsPerFeed, *maxDays, *faviconDir, faviconPrefix)
 				results <- result{items: items, url: s.URL, err: err}
 				if err != nil {
 					log.Printf("ERROR [%s]: %v", s.URL, err)
@@ -409,6 +424,71 @@ func googleFaviconURL(origin string) string {
 	return "https://www.google.com/s2/favicons?domain=" + url.QueryEscape(domain) + "&sz=64"
 }
 
+// domainFromURL 从 URL 解析出 hostname，用于本地 favicon 文件名（如 example.com）。
+func domainFromURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	return u.Hostname()
+}
+
+// extFromFaviconURL 从 favicon URL 路径取扩展名（如 .ico、.svg），无则返回 .ico。
+func extFromFaviconURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ".ico"
+	}
+	ext := strings.ToLower(filepath.Ext(u.Path))
+	switch ext {
+	case ".ico", ".svg", ".png", ".gif", ".webp":
+		return ext
+	}
+	return ".ico"
+}
+
+// resolveAvatarToLocal 在 faviconDir 下保存 favicon，文件名为 {域名}.{原始后缀}；若已存在则跳过下载。返回用于 JSON 的路径：avatar = faviconPathPrefix + "/" + domain + ext。
+func resolveAvatarToLocal(avatarURL string, origin string, faviconDir string, faviconPathPrefix string) string {
+	if faviconDir == "" || faviconPathPrefix == "" || avatarURL == "" {
+		return avatarURL
+	}
+	domain := domainFromURL(origin)
+	if domain == "" {
+		domain = domainFromURL(avatarURL)
+	}
+	if domain == "" {
+		return avatarURL
+	}
+	ext := extFromFaviconURL(avatarURL)
+	absPath := filepath.Join(faviconDir, domain+ext)
+	relativePath := faviconPathPrefix + "/" + domain + ext
+	if _, err := os.Stat(absPath); err == nil {
+		return relativePath
+	}
+	req, err := http.NewRequest(http.MethodGet, avatarURL, nil)
+	if err != nil {
+		return avatarURL
+	}
+	req.Header.Set("User-Agent", userAgent)
+	resp, err := faviconClient.Do(req)
+	if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		return avatarURL
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+	if err != nil {
+		return avatarURL
+	}
+	if err := os.WriteFile(absPath, data, 0644); err != nil {
+		log.Printf("WARN: write favicon %s: %v", absPath, err)
+		return avatarURL
+	}
+	return relativePath
+}
+
 // resolveFavicon 返回 origin 下存在的 favicon URL：先试 favicon.ico，再试 favicon.svg；
 // 都不存在则抓取首页解析 link rel="icon" 的 href（并验证 URL 是否存在）；
 // 仍无则兜底使用 Google favicon 服务。
@@ -609,7 +689,7 @@ func fetchWithBackoff(feedURL string) (*gofeed.Feed, error) {
 	return nil, fmt.Errorf("after %d retries: %w", maxRetries, lastErr)
 }
 
-func fetchAndParse(feedURL string, category string, maxItemsPerFeed int, maxDays int) ([]FeedItem, error) {
+func fetchAndParse(feedURL string, category string, maxItemsPerFeed int, maxDays int, faviconDir string, faviconPathPrefix string) ([]FeedItem, error) {
 	feed, err := fetchWithBackoff(feedURL)
 	if err != nil {
 		return nil, err
@@ -619,20 +699,21 @@ func fetchAndParse(feedURL string, category string, maxItemsPerFeed int, maxDays
 	if blogName != "" && !strings.HasPrefix(blogName, "@") {
 		blogName = "@" + blogName
 	}
+	origin := ""
+	if o := originFromURL(feed.Link); o != "" {
+		origin = strings.TrimSuffix(o, "/")
+	} else if len(feed.Items) > 0 {
+		origin = strings.TrimSuffix(originFromURL(feed.Items[0].Link), "/")
+	}
 	avatar := ""
 	if feed.Image != nil && feed.Image.URL != "" {
 		avatar = strings.TrimSpace(feed.Image.URL)
 	}
-	if avatar == "" {
-		origin := ""
-		if o := originFromURL(feed.Link); o != "" {
-			origin = strings.TrimSuffix(o, "/")
-		} else if len(feed.Items) > 0 {
-			origin = strings.TrimSuffix(originFromURL(feed.Items[0].Link), "/")
-		}
-		if origin != "" {
-			avatar = resolveFavicon(origin)
-		}
+	if avatar == "" && origin != "" {
+		avatar = resolveFavicon(origin)
+	}
+	if avatar != "" && faviconDir != "" && faviconPathPrefix != "" {
+		avatar = resolveAvatarToLocal(avatar, origin, faviconDir, faviconPathPrefix)
 	}
 
 	entries := feed.Items
