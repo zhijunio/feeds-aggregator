@@ -1,8 +1,16 @@
+# RSS 源地址列表；空行与 # 开头的行会被忽略
+# 格式 1：每行一个 URL
+# 格式 2：分类，URL（逗号前为分类，会输出到 feeds.json 的 category，便于分类）
+#
+# 示例（请替换为自己的订阅源）：
+# https://blog.example.com/feed.xml
+# blog,https://another.com/atom.xml
 https://1byte.io/articles/index.xml
 https://api.joshlong.com/feed.xml
 https://atbug.com/index.xml
 https://blog.algomaster.io/feed
 https://blog.bytebytego.com/feed
+https://blog.chensoul.cc/rss.xml
 https://blog.einverne.info/rss.xml
 https://callistaenterprise.se/feed.xml
 https://catcoding.me/atom.xml
@@ -64,3 +72,4 @@ https://rsshub.chensoul.cc/youtube/user/%40tubeguruji
 https://rsshub.chensoul.cc/youtube/user/%40webdecoded
 https://rsshub.chensoul.cc/youtube/user/%40webprodigies
 https://rsshub.chensoul.cc/youtube/user/%40zenyarnliu
+https://www.bestblogs.dev/feeds/rss?minScore=70
