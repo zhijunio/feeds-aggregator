@@ -1,0 +1,2 @@
+[console_scripts]
+feeds-aggregator = feeds_aggregator.cli:main

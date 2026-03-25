@@ -9,7 +9,9 @@ description = "Aggregate feed sources into a unified result"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "chensoul" }]
-dependencies = []
+dependencies = [
+    "pillow>=10.0.0",
+]
 
 [project.scripts]
 feeds-aggregator = "feeds_aggregator.cli:main"

@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import replace
 import hashlib
 from html.parser import HTMLParser
+from io import BytesIO
 import json
 import logging
 from pathlib import Path
@@ -13,6 +14,8 @@ from typing import Callable, Iterable
 from urllib.parse import parse_qs, urljoin, urlparse
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+
+from PIL import Image
 
 from .models import ProcessedItem, ProcessedOutput
 from .url_utils import normalize_http_url
@@ -483,14 +486,18 @@ def download_avatar(
             logger.warning("Avatar download returned empty payload for %s", avatar_url)
             continue
 
-        extension = resolve_avatar_extension(parsed.path, content_type=content_type)
+        prepared = prepare_avatar_payload(payload)
+        if prepared is None:
+            logger.warning("Avatar payload from %s is not a supported SVG/raster icon", avatar_url)
+            continue
+        payload_out, extension = prepared
         filename = build_avatar_filename(feed_domain or parsed.hostname or parsed.netloc, source_identity, extension)
         try:
             avatar_root.mkdir(parents=True, exist_ok=True)
             avatar_path = avatar_root / filename
             if avatar_path.exists():
                 return filename
-            avatar_path.write_bytes(payload)
+            avatar_path.write_bytes(payload_out)
             logger.info("Saved avatar for %s to %s", avatar_url, avatar_path)
             return filename
         except OSError:
@@ -543,24 +550,58 @@ def normalize_avatar_url(value: str | None) -> str | None:
     return normalize_http_url(value)
 
 
-def resolve_avatar_extension(path: str, *, content_type: str) -> str:
-    suffix = resolve_url_extension(path)
-    if suffix is not None:
-        return suffix
-
-    if content_type == "image/png":
-        return ".png"
-    if content_type == "image/jpeg":
-        return ".jpg"
-    if content_type == "image/webp":
-        return ".webp"
-    if content_type == "image/gif":
-        return ".gif"
-    if content_type == "image/svg+xml":
+def sniff_svg_extension(payload: bytes) -> str | None:
+    """If body looks like SVG XML, return .svg (URL may wrongly use .png etc.)."""
+    if not payload:
+        return None
+    sample = payload[:16384].lstrip()
+    if sample.startswith(b"\xef\xbb\xbf"):
+        return sniff_svg_extension(sample[3:])
+    if sample.startswith(b"<svg"):
         return ".svg"
-    if content_type in {"image/x-icon", "image/vnd.microsoft.icon"}:
-        return ".ico"
-    return ".img"
+    if sample.startswith(b"<?xml") and b"<svg" in sample[:8192]:
+        return ".svg"
+    return None
+
+
+_ICO_SAVE_SIZES = [(16, 16), (32, 32), (48, 48)]
+
+
+def _image_to_ico_bytes(im: Image.Image) -> bytes:
+    """Encode a Pillow image as a multi-resolution Windows ICO."""
+    if im.mode != "RGBA":
+        if im.mode == "P" and "transparency" in im.info:
+            im = im.convert("RGBA")
+        elif im.mode in ("RGB", "RGBA", "L", "LA"):
+            im = im.convert("RGBA")
+        else:
+            im = im.convert("RGBA")
+    w, h = im.size
+    if max(w, h) > 256:
+        im = im.copy()
+        im.thumbnail((256, 256), Image.Resampling.LANCZOS)
+    out = BytesIO()
+    im.save(out, format="ICO", sizes=_ICO_SAVE_SIZES)
+    return out.getvalue()
+
+
+def prepare_avatar_payload(payload: bytes) -> tuple[bytes, str] | None:
+    """Keep SVG as-is; normalize ICO/raster (PNG, JPEG, WebP, GIF, …) to ICO bytes."""
+    if not payload:
+        return None
+    if sniff_svg_extension(payload):
+        return payload, ".svg"
+    try:
+        im = Image.open(BytesIO(payload))
+        im.load()
+    except Exception as exc:
+        logger.warning("Avatar bytes are not a decodable raster/ICO image: %s", exc)
+        return None
+    try:
+        return _image_to_ico_bytes(im), ".ico"
+    except Exception as exc:
+        logger.warning("Failed to encode avatar as ICO: %s", exc)
+        return None
 
 
 def build_avatar_filename(domain: str, source_identity: str, extension: str) -> str:

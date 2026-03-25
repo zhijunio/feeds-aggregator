@@ -11,6 +11,8 @@ import unittest
 from unittest.mock import patch
 from urllib.error import HTTPError
 
+from PIL import Image
+
 from feeds_aggregator.application import RunAggregationRequest, RunAggregationResult, run_aggregation
 from feeds_aggregator.aggregator import AggregationConfig
 from feeds_aggregator.cli import FAILURE_EXIT_CODE, INPUT_ERROR_EXIT_CODE, LOG_MESSAGE_FORMAT, LOG_TIME_FORMAT, SUCCESS_EXIT_CODE, build_parser, build_summary_payload, configure_logging, main
@@ -22,6 +24,7 @@ from feeds_aggregator.output_writer import (
     build_browser_page_request,
     format_avatar_public_path,
     persist_avatars,
+    prepare_avatar_payload,
     write_output_file,
 )
 from feeds_aggregator.processing import ProcessingConfig
@@ -44,6 +47,27 @@ class MockHttpResponse:
 
     def __exit__(self, exc_type, exc, tb):
         return False
+
+
+_ICO_MAGIC = b"\x00\x00\x01\x00"
+
+
+def _tiny_png_bytes() -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGBA", (16, 16), (200, 30, 40, 255)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _tiny_jpeg_bytes() -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", (16, 16), (40, 180, 90)).save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
+
+def _tiny_ico_bytes() -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGBA", (16, 16), (0, 120, 200, 255)).save(buf, format="ICO", sizes=[(16, 16)])
+    return buf.getvalue()
 
 
 class OutputAndReportingTests(unittest.TestCase):
@@ -698,16 +722,58 @@ class OutputAndReportingTests(unittest.TestCase):
 
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
-            with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(b"PNGDATA")):
+            with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(_tiny_png_bytes())):
                 persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
-            expected_name = f"feeds_example_com_{avatar_hash}.png"
+            expected_name = f"feeds_example_com_{avatar_hash}.ico"
             expected_file = output_path.parent / "avatars" / expected_name
 
             self.assertEqual(expected_name, persisted.items[0].avatar)
             self.assertTrue(expected_file.exists())
-            self.assertEqual(b"PNGDATA", expected_file.read_bytes())
+            self.assertTrue(expected_file.read_bytes().startswith(_ICO_MAGIC))
+
+    def test_persist_avatars_uses_svg_suffix_when_png_url_returns_svg_body(self):
+        avatar_url = "https://cdn.example.com/favicon.png?v=1"
+        svg_body = b'<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"></svg>'
+        output = ProcessedOutput(
+            items=[
+                ProcessedItem(
+                    title="Post",
+                    link="https://example.com/post",
+                    published="2026-03-13 10:00:00",
+                    name="Example",
+                    avatar=avatar_url,
+                    feed_domain="feeds.example.com",
+                    source_key="https://example.com/feed.xml",
+                )
+            ],
+            updated="2026-03-13 12:00:00",
+        )
+
+        with TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "feeds.json"
+            with patch(
+                "feeds_aggregator.output_writer.urlopen",
+                return_value=MockHttpResponse(svg_body, content_type="image/png"),
+            ):
+                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+
+            avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
+            expected_name = f"feeds_example_com_{avatar_hash}.svg"
+            expected_file = output_path.parent / "avatars" / expected_name
+
+            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertTrue(expected_file.exists())
+            self.assertEqual(svg_body, expected_file.read_bytes())
+
+    def test_prepare_avatar_payload_prefers_svg_sniff(self):
+        svg_body = b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>"
+        prepared = prepare_avatar_payload(svg_body)
+        self.assertIsNotNone(prepared)
+        out, ext = prepared
+        self.assertEqual(".svg", ext)
+        self.assertEqual(svg_body, out)
 
     def test_persist_avatars_supports_custom_dir(self):
         avatar_url = "https://img.example.org/icons/site.ico"
@@ -729,7 +795,7 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "data" / "feeds.json"
             avatar_dir = Path(tmpdir) / "custom_avatars"
-            with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(b"ICODATA", content_type="image/x-icon")):
+            with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(_tiny_ico_bytes(), content_type="image/x-icon")):
                 persisted = persist_avatars(
                     output,
                     output_path=output_path,
@@ -743,7 +809,7 @@ class OutputAndReportingTests(unittest.TestCase):
 
             self.assertEqual(expected_name, persisted.items[0].avatar)
             self.assertTrue(expected_file.exists())
-            self.assertEqual(b"ICODATA", expected_file.read_bytes())
+            self.assertTrue(expected_file.read_bytes().startswith(_ICO_MAGIC))
 
     def test_persist_avatars_waits_before_requests_when_delay_configured(self):
         avatar_url = "https://cdn.example.com/images/logo.png?size=64"
@@ -765,7 +831,7 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.sleep") as mocked_sleep:
-                with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(b"PNGDATA")):
+                with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(_tiny_png_bytes())):
                     persist_avatars(output, output_path=output_path, timeout_seconds=1.0, delay_ms=250)
 
         mocked_sleep.assert_called()
@@ -792,12 +858,12 @@ class OutputAndReportingTests(unittest.TestCase):
             output_path = Path(tmpdir) / "feeds.json"
             with patch(
                 "feeds_aggregator.output_writer.urlopen",
-                side_effect=[TimeoutError("timed out"), MockHttpResponse(b"PNGDATA")],
+                side_effect=[TimeoutError("timed out"), MockHttpResponse(_tiny_png_bytes())],
             ) as mocked_urlopen:
                 persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0, delay_ms=0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
-            expected_name = f"feeds_example_com_{avatar_hash}.png"
+            expected_name = f"feeds_example_com_{avatar_hash}.ico"
 
             self.assertEqual(expected_name, persisted.items[0].avatar)
             self.assertEqual(2, mocked_urlopen.call_count)
@@ -878,7 +944,7 @@ class OutputAndReportingTests(unittest.TestCase):
             b"<html><head><link rel=\"icon\" href=\"/assets/icon.png\"></head></html>",
             content_type="text/html",
         )
-        image_response = MockHttpResponse(b"PNGDATA", content_type="image/png")
+        image_response = MockHttpResponse(_tiny_png_bytes(), content_type="image/png")
 
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
@@ -886,7 +952,7 @@ class OutputAndReportingTests(unittest.TestCase):
                 persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
-            expected_name = f"feeds_example_com_{avatar_hash}.png"
+            expected_name = f"feeds_example_com_{avatar_hash}.ico"
 
             self.assertEqual(expected_name, persisted.items[0].avatar)
 
@@ -911,7 +977,7 @@ class OutputAndReportingTests(unittest.TestCase):
             b"<html><head><link rel=\"icon\" href=\"/assets/icon.png\"></head></html>",
             content_type="text/html",
         )
-        image_response = MockHttpResponse(b"PNGDATA", content_type="image/png")
+        image_response = MockHttpResponse(_tiny_png_bytes(), content_type="image/png")
         requested_urls: list[str] = []
 
         def fake_urlopen(request, timeout=0):
@@ -926,7 +992,7 @@ class OutputAndReportingTests(unittest.TestCase):
                 persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
-            expected_name = f"feeds_example_com_{avatar_hash}.png"
+            expected_name = f"feeds_example_com_{avatar_hash}.ico"
 
             self.assertEqual(expected_name, persisted.items[0].avatar)
             self.assertEqual("https://example.com/", requested_urls[0])
@@ -952,7 +1018,7 @@ class OutputAndReportingTests(unittest.TestCase):
             b"<html><head><link rel=\"image_src\" href=\"https://yt3.googleusercontent.com/channel-avatar=s900-c-k-c0x00ffffff-no-rj\"></head></html>",
             content_type="text/html",
         )
-        image_response = MockHttpResponse(b"IMGDATA", content_type="image/jpeg")
+        image_response = MockHttpResponse(_tiny_jpeg_bytes(), content_type="image/jpeg")
 
         requested_urls: list[str] = []
 
@@ -968,7 +1034,7 @@ class OutputAndReportingTests(unittest.TestCase):
                 persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://www.youtube.com/feeds/videos.xml?channel_id=abc".encode("utf-8")).hexdigest()[:16]
-            expected_name = f"www_youtube_com_{avatar_hash}.jpg"
+            expected_name = f"www_youtube_com_{avatar_hash}.ico"
 
             self.assertEqual(expected_name, persisted.items[0].avatar)
             self.assertEqual("https://www.youtube.com/channel/abc", requested_urls[0])
@@ -997,7 +1063,7 @@ class OutputAndReportingTests(unittest.TestCase):
             b"<html><head><meta name=\"twitter:image\" content=\"https://yt3.googleusercontent.com/channel-avatar-meta=s900-c-k-c0x00ffffff-no-rj\"></head></html>",
             content_type="text/html",
         )
-        image_response = MockHttpResponse(b"IMGDATA", content_type="image/jpeg")
+        image_response = MockHttpResponse(_tiny_jpeg_bytes(), content_type="image/jpeg")
 
         requested_urls: list[str] = []
 
@@ -1013,7 +1079,7 @@ class OutputAndReportingTests(unittest.TestCase):
                 persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://www.youtube.com/feeds/videos.xml?channel_id=abc".encode("utf-8")).hexdigest()[:16]
-            expected_name = f"www_youtube_com_{avatar_hash}.jpg"
+            expected_name = f"www_youtube_com_{avatar_hash}.ico"
 
             self.assertEqual(expected_name, persisted.items[0].avatar)
             self.assertEqual("https://www.youtube.com/channel/abc", requested_urls[0])
@@ -1045,7 +1111,7 @@ class OutputAndReportingTests(unittest.TestCase):
             b"</head></html>",
             content_type="text/html",
         )
-        image_response = MockHttpResponse(b"IMGDATA", content_type="image/jpeg")
+        image_response = MockHttpResponse(_tiny_jpeg_bytes(), content_type="image/jpeg")
         requested_urls: list[str] = []
 
         def fake_urlopen(request, timeout=0):
@@ -1060,7 +1126,7 @@ class OutputAndReportingTests(unittest.TestCase):
                 persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://www.youtube.com/feeds/videos.xml?channel_id=abc".encode("utf-8")).hexdigest()[:16]
-            expected_name = f"www_youtube_com_{avatar_hash}.jpg"
+            expected_name = f"www_youtube_com_{avatar_hash}.ico"
 
             self.assertEqual(expected_name, persisted.items[0].avatar)
             self.assertEqual("https://www.youtube.com/channel/abc", requested_urls[0])
@@ -1093,7 +1159,7 @@ class OutputAndReportingTests(unittest.TestCase):
             b"</head></html>",
             content_type="text/html",
         )
-        image_response = MockHttpResponse(b"ICODATA", content_type="image/x-icon")
+        image_response = MockHttpResponse(_tiny_ico_bytes(), content_type="image/x-icon")
         requested_urls: list[str] = []
 
         def fake_urlopen(request, timeout=0):
@@ -1138,7 +1204,7 @@ class OutputAndReportingTests(unittest.TestCase):
             b"</head></html>",
             content_type="text/html",
         )
-        image_response = MockHttpResponse(b"JPGDATA", content_type="image/jpeg")
+        image_response = MockHttpResponse(_tiny_jpeg_bytes(), content_type="image/jpeg")
         requested_urls: list[str] = []
 
         def fake_urlopen(request, timeout=0):
@@ -1156,7 +1222,7 @@ class OutputAndReportingTests(unittest.TestCase):
                 persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
-            expected_name = f"example_com_{avatar_hash}.jpg"
+            expected_name = f"example_com_{avatar_hash}.ico"
 
             self.assertEqual(expected_name, persisted.items[0].avatar)
             self.assertEqual("https://example.com/", requested_urls[0])
@@ -1205,8 +1271,8 @@ class OutputAndReportingTests(unittest.TestCase):
         )
 
         requested_urls: list[str] = []
-        favicon_response = MockHttpResponse(b"ICODATA", content_type="image/x-icon")
-        image_response = MockHttpResponse(b"ICODATA", content_type="image/x-icon")
+        favicon_response = MockHttpResponse(_tiny_ico_bytes(), content_type="image/x-icon")
+        image_response = MockHttpResponse(_tiny_ico_bytes(), content_type="image/x-icon")
 
         def fake_urlopen(request, timeout=0):
             requested_urls.append(getattr(request, "full_url", request))
@@ -1292,7 +1358,7 @@ class OutputAndReportingTests(unittest.TestCase):
             b"<html><head><link rel=\"icon\" href=\"/assets/icon.png\"></head></html>",
             content_type="text/html",
         )
-        image_response = MockHttpResponse(b"PNGDATA", content_type="image/png")
+        image_response = MockHttpResponse(_tiny_png_bytes(), content_type="image/png")
 
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
@@ -1322,11 +1388,11 @@ class OutputAndReportingTests(unittest.TestCase):
 
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
-            with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(b"PNGDATA")):
+            with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(_tiny_png_bytes())):
                 persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
-            expected_name = f"feeds_example_com_{avatar_hash}.png"
+            expected_name = f"feeds_example_com_{avatar_hash}.ico"
 
             self.assertEqual(expected_name, persisted.items[0].avatar)
 
@@ -1358,13 +1424,13 @@ class OutputAndReportingTests(unittest.TestCase):
 
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
-            with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(b"PNGDATA")):
+            with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(_tiny_png_bytes())):
                 persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash_a = hashlib.sha256("https://example.com/feed-a.xml".encode("utf-8")).hexdigest()[:16]
             avatar_hash_b = hashlib.sha256("https://example.com/feed-b.xml".encode("utf-8")).hexdigest()[:16]
-            self.assertEqual(f"feed-a_example_com_{avatar_hash_a}.png", persisted.items[0].avatar)
-            self.assertEqual(f"feed-b_example_com_{avatar_hash_b}.png", persisted.items[1].avatar)
+            self.assertEqual(f"feed-a_example_com_{avatar_hash_a}.ico", persisted.items[0].avatar)
+            self.assertEqual(f"feed-b_example_com_{avatar_hash_b}.ico", persisted.items[1].avatar)
 
     def test_build_avatar_filename_replaces_commas_with_underscores(self):
         source_identity = "https://example.com/feed.xml"
