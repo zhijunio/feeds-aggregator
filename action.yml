@@ -41,6 +41,10 @@ inputs:
     description: Directory to store downloaded avatar images
     required: false
     default: ""
+  avatar-public-prefix:
+    description: Root-relative URL prefix for local avatar filenames in JSON (e.g. /images/_favicons); empty keeps basename only
+    required: false
+    default: ""
   failure-log:
     description: Optional JSON file path for writing failed feed details
     required: false
@@ -78,6 +82,7 @@ runs:
         if [ -n "${{ inputs.max-days }}" ]; then args+=(--max-days "${{ inputs.max-days }}"); fi
         if [ -n "${{ inputs.timezone }}" ]; then args+=(--timezone "${{ inputs.timezone }}"); fi
         if [ -n "${{ inputs.avatar-dir }}" ]; then args+=(--avatar-dir "${{ inputs.avatar-dir }}"); fi
+        if [ -n "${{ inputs.avatar-public-prefix }}" ]; then args+=(--avatar-public-prefix "${{ inputs.avatar-public-prefix }}"); fi
         if [ -n "${{ inputs.failure-log }}" ]; then args+=(--failure-log "${{ inputs.failure-log }}"); fi
         if [ "${{ inputs.validate-only }}" = "true" ]; then args+=(--validate-only); fi
         feeds-aggregator "${args[@]}"

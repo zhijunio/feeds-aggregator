@@ -17,7 +17,13 @@ from feeds_aggregator.cli import FAILURE_EXIT_CODE, INPUT_ERROR_EXIT_CODE, LOG_M
 from feeds_aggregator.errors import InputValidationError
 from feeds_aggregator.failure_log import write_failure_log
 from feeds_aggregator.models import AggregationResult, FeedSource, InputLoadResult, ProcessedItem, ProcessedOutput, RawFeedDocument, RawFeedEntry, SourceAggregationFailure
-from feeds_aggregator.output_writer import build_avatar_filename, build_browser_page_request, persist_avatars, write_output_file
+from feeds_aggregator.output_writer import (
+    build_avatar_filename,
+    build_browser_page_request,
+    format_avatar_public_path,
+    persist_avatars,
+    write_output_file,
+)
 from feeds_aggregator.processing import ProcessingConfig
 from feeds_aggregator.reporting import TaskReport, build_task_report
 from feeds_aggregator.runner import process_sources_to_items
@@ -217,6 +223,46 @@ class OutputAndReportingTests(unittest.TestCase):
             payload = json.loads(written.read_text(encoding="utf-8"))
 
         self.assertEqual("@Example", payload["items"][0]["name"])
+
+    def test_write_output_file_prepends_avatar_public_prefix(self):
+        output = ProcessedOutput(
+            items=[
+                ProcessedItem(
+                    title="Post",
+                    link="https://example.com/post",
+                    published="2026-03-13 10:00:00",
+                    name="Example",
+                    category="tech",
+                    avatar="foo_example_com_abc.ico",
+                )
+            ],
+            updated="2026-03-13 12:00:00",
+        )
+
+        with TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "feeds.json"
+            write_output_file(output, path, avatar_public_prefix="/images/_favicons")
+            payload = json.loads(path.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            "/images/_favicons/foo_example_com_abc.ico",
+            payload["items"][0]["avatar"],
+        )
+
+    def test_format_avatar_public_path_skips_absolute_and_root_relative(self):
+        self.assertEqual(
+            "https://cdn.example/x.png",
+            format_avatar_public_path(
+                "https://cdn.example/x.png", public_prefix="/images/_favicons"
+            ),
+        )
+        self.assertEqual(
+            "/images/other/x.png",
+            format_avatar_public_path(
+                "/images/other/x.png", public_prefix="/images/_favicons"
+            ),
+        )
+        self.assertIsNone(format_avatar_public_path(None, public_prefix="/x"))
 
     def test_build_summary_payload_lists_failed_feed_urls(self):
         source = FeedSource(source_url="https://example.com/feed.xml")

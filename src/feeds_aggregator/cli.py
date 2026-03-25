@@ -68,6 +68,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--timezone", default=DEFAULT_TIMEZONE, help=f"IANA timezone for output timestamps (default: {DEFAULT_TIMEZONE})")
     parser.add_argument("--avatar-dir", default="", help="Directory to store downloaded avatar images (default: <output-dir>/avatars)")
+    parser.add_argument(
+        "--avatar-public-prefix",
+        default="",
+        help="Root-relative URL prefix prepended to local avatar filenames in JSON (e.g. /images/_favicons); empty keeps basename only",
+    )
     parser.add_argument("--failure-log", default="", help="Optional JSON file path for writing failed feed details")
     parser.add_argument("--validate-only", action="store_true", help="Validate inputs and configuration without fetching feeds or writing output")
     return parser
@@ -92,6 +97,7 @@ def main() -> int:
                 max_days=args.max_days,
                 timezone_name=args.timezone,
                 avatar_dir=args.avatar_dir or None,
+                avatar_public_prefix=args.avatar_public_prefix or None,
                 failure_log_path=args.failure_log or None,
                 validate_only=args.validate_only,
             )

@@ -28,6 +28,7 @@ class RunAggregationRequest:
     timezone_name: str
     avatar_delay_ms: int = 200
     avatar_dir: str | None = None
+    avatar_public_prefix: str | None = None
     failure_log_path: str | None = None
     validate_only: bool = False
 
@@ -93,7 +94,13 @@ def run_aggregation(request: RunAggregationRequest) -> RunAggregationResult:
     output_error: str | None = None
     if aggregation.outcome != "failure":
         try:
-            written_output_path = str(write_output_file(processed, request.output_path))
+            written_output_path = str(
+                write_output_file(
+                    processed,
+                    request.output_path,
+                    avatar_public_prefix=request.avatar_public_prefix,
+                )
+            )
             output_written = True
         except OSError as exc:
             output_written = False

@@ -86,19 +86,43 @@ def resolve_link_avatar_priority(rel_tokens: set[str]) -> int:
     return -1
 
 
-def write_output_file(output: ProcessedOutput, output_path: str | Path) -> Path:
+def format_avatar_public_path(avatar: str | None, *, public_prefix: str | None) -> str | None:
+    """将落盘后的本地 avatar 文件名转为写入 JSON 的公共路径（根相对或保持外链）。"""
+    if avatar is None:
+        return None
+    a = str(avatar).strip()
+    if not a:
+        return avatar
+    if a.startswith(("http://", "https://", "/")):
+        return a
+    prefix = (public_prefix or "").strip().rstrip("/")
+    if not prefix:
+        return a
+    return f"{prefix}/{a.lstrip('/')}"
+
+
+def write_output_file(
+    output: ProcessedOutput,
+    output_path: str | Path,
+    *,
+    avatar_public_prefix: str | None = None,
+) -> Path:
     path = Path(output_path)
     if path.exists() and path.is_dir():
         raise OSError(f"Output path is a directory: {path}")
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = serialize_output(output)
+    payload = serialize_output(output, avatar_public_prefix=avatar_public_prefix)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     logger.info("Wrote output file to %s with %d items", path, len(output.items))
     return path
 
 
-def serialize_output(output: ProcessedOutput) -> dict[str, object]:
+def serialize_output(
+    output: ProcessedOutput,
+    *,
+    avatar_public_prefix: str | None = None,
+) -> dict[str, object]:
     formatted = apply_output_formatting(output)
     return {
         "items": [
@@ -108,7 +132,9 @@ def serialize_output(output: ProcessedOutput) -> dict[str, object]:
                 "published": item.published,
                 "name": item.name,
                 "category": item.category,
-                "avatar": item.avatar,
+                "avatar": format_avatar_public_path(
+                    item.avatar, public_prefix=avatar_public_prefix
+                ),
             }
             for item in formatted.items
         ],

@@ -27,10 +27,11 @@ PYTHONPATH=src python3 -m feeds_aggregator.cli --sources data/rss.txt --output d
 - `--max-days`：仅保留最近多少天内容，默认 `0` 表示不限制
 - `--timezone`：输出时间使用的 IANA 时区，默认 `UTC`
 - `--avatar-dir`：avatar 图片本地保存目录，默认 `<output-dir>/avatars`
+- `--avatar-public-prefix`：可选，写入 JSON 时在本地文件名前加根相对前缀（如 `/images/_favicons`）；默认空，仅输出文件名
 - `--failure-log`：可选，把失败源详情写入一个 JSON 文件
 - `--validate-only`：只校验输入和配置，不抓取 feed，也不写输出文件
 
-注意：输出的 JSON 文件中 `avatar` 字段仅包含文件名（如 `example_com_abc123.png`），不带路径前缀。
+注意：默认情况下输出的 JSON 里 `avatar` 仅为文件名（如 `example_com_abc123.png`）。若配置了 `--avatar-public-prefix`（例如博客静态资源在 `/images/_favicons/`），则会写成根相对路径（如 `/images/_favicons/example_com_abc123.png`）。外链（`http(s)://`）或已是根相对路径的值不会被改写。
 
 ## 输入格式
 
@@ -179,7 +180,8 @@ jobs:
       sources: data/rss.txt
       output: data/feeds.json
       avatar-delay-ms: 300
-      avatar-dir: data/avatars
+      avatar-dir: public/images/_favicons
+      avatar-public-prefix: /images/_favicons
       max-items-per-source: 20
       max-days: 30
 ```

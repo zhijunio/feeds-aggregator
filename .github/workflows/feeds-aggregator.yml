@@ -52,6 +52,11 @@ on:
         required: false
         type: string
         default: ""
+      avatar-public-prefix:
+        description: Root-relative URL prefix for local avatars in JSON (e.g. /images/_favicons)
+        required: false
+        type: string
+        default: ""
       failure-log:
         description: Optional JSON file path for writing failed feed details
         required: false
@@ -88,5 +93,6 @@ jobs:
           max-days: ${{ inputs.max-days }}
           timezone: ${{ inputs.timezone }}
           avatar-dir: ${{ inputs.avatar-dir }}
+          avatar-public-prefix: ${{ inputs.avatar-public-prefix }}
           failure-log: ${{ inputs.failure-log }}
           validate-only: ${{ inputs.validate-only }}
