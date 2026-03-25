@@ -8,3 +8,4 @@ feeds-aggregator
 __pycache__/
 .venv/
 .codex/
+src/feeds_aggregator.egg-info
