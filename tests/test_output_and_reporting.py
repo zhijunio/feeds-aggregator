@@ -209,7 +209,6 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    category="tech",
                     avatar=None,
                 )
             ],
@@ -256,7 +255,6 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    category="tech",
                     avatar="foo_example_com_abc.ico",
                 )
             ],
@@ -1441,7 +1439,7 @@ class OutputAndReportingTests(unittest.TestCase):
         self.assertEqual(f"cdn_example_com_{avatar_hash}.png", filename)
 
     def test_write_failure_log_creates_expected_json(self):
-        source = FeedSource(source_url="https://example.com/feed.xml", category="tech", source_name="Example")
+        source = FeedSource(source_url="https://example.com/feed.xml", source_name="Example")
         failures = [SourceAggregationFailure(source=source, error="boom")]
 
         with TemporaryDirectory() as tmpdir:

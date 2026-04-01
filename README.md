@@ -26,12 +26,10 @@ PYTHONPATH=src python3 -m feeds_aggregator.cli --sources data/rss.txt --output d
 - `--max-total-items`：最终结果最多保留几条，默认 `0` 表示不限制
 - `--max-days`：仅保留最近多少天内容，默认 `0` 表示不限制
 - `--timezone`：输出时间使用的 IANA 时区，默认 `UTC`
-- `--avatar-dir`：avatar 图片本地保存目录，默认 `<output-dir>/avatars`
-- `--avatar-public-prefix`：可选，写入 JSON 时在本地文件名前加根相对前缀（如 `/images/_favicons`）；默认空，仅输出文件名
+- `--avatar-dir`：avatar 图片本地保存目录，默认 `<output-dir>/favicons`
+- `--avatar-public-prefix`：可选，写入 JSON 时在本地文件名前加根相对前缀（如 `/favicons`）；默认空，仅输出文件名
 - `--failure-log`：可选，把失败源详情写入一个 JSON 文件
 - `--validate-only`：只校验输入和配置，不抓取 feed，也不写输出文件
-
-注意：默认情况下输出的 JSON 里 `avatar` 仅为文件名（如 `example_com_abc123.png`）。若配置了 `--avatar-public-prefix`（例如博客静态资源在 `/images/_favicons/`），则会写成根相对路径（如 `/images/_favicons/example_com_abc123.png`）。外链（`http(s)://`）或已是根相对路径的值不会被改写。
 
 ## 输入格式
 
@@ -39,20 +37,18 @@ PYTHONPATH=src python3 -m feeds_aggregator.cli --sources data/rss.txt --output d
 
 ### 1. 文本输入
 
-每行一个来源，支持：
-- `URL`
-- `分类,URL`
+每行一个订阅源 URL（`http` / `https`）。若某行含逗号，仅取**首个逗号之后**的内容作为地址（兼容旧版「前缀,URL」写法，不再解析或输出分类）。
 
 示例：
 
 ```txt
 https://example.com/feed.xml
-tech,https://another.com/rss.xml
+https://another.com/rss.xml
 ```
 
 ### 2. OPML 输入
 
-支持常见 OPML 订阅导出文件。
+支持常见 OPML 订阅导出文件；仅读取各条目的 `xmlUrl`（及展示名），**不使用**分组或 `category` 属性。
 
 示例文件：`data/follow.opml`
 
@@ -68,7 +64,6 @@ tech,https://another.com/rss.xml
       "link": "https://example.com/post",
       "published": "2026-03-13 10:00:00",
       "name": "@Example Blog",
-      "category": "tech",
       "avatar": null
     }
   ],
@@ -149,10 +144,6 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 
 ## GitHub Actions
 
-项目现在同时提供两种 GitHub Actions 集成方式。
-
-标准 GitHub Action 插件入口在 [action.yml](/Users/chensoul/development/personal/feeds-aggregator/action.yml)，其他仓库可以直接 `uses:`：
-
 ```yaml
 jobs:
   aggregate:
@@ -167,23 +158,3 @@ jobs:
           max-items-per-source: 20
           max-days: 30
 ```
-
-标准 action 只暴露高频业务参数，不负责 Python 版本选择和 CI 编排能力。
-
-如果你更希望把环境准备和 artifact 上传都封装在这个仓库里，也可以调用可复用工作流 [feeds-aggregator.yml](/Users/chensoul/development/personal/feeds-aggregator/.github/workflows/feeds-aggregator.yml)：
-
-```yaml
-jobs:
-  aggregate:
-    uses: chensoul/feeds-aggregator/.github/workflows/feeds-aggregator.yml@main
-    with:
-      sources: data/rss.txt
-      output: data/feeds.json
-      avatar-delay-ms: 300
-      avatar-dir: public/images/_favicons
-      avatar-public-prefix: /images/_favicons
-      max-items-per-source: 20
-      max-days: 30
-```
-
-两种方式都要求调用方仓库先 checkout 自己的代码，并把输入文件放在工作区里。可复用工作流负责 Python 环境准备；标准 action 只负责执行聚合。失败的 feed 会在任务日志和 CLI 汇总输出里显示。

@@ -10,7 +10,7 @@ from feeds_aggregator.processing import ProcessingConfig, process_aggregation_re
 
 class ProcessingTests(unittest.TestCase):
     def test_normalizes_and_sorts_items(self):
-        source = FeedSource(source_url="https://example.com/feed.xml", category="tech", source_name="Example")
+        source = FeedSource(source_url="https://example.com/feed.xml", source_name="Example")
         result = AggregationResult(
             successes=[
                 RawFeedDocument(
@@ -38,7 +38,6 @@ class ProcessingTests(unittest.TestCase):
         self.assertEqual("Newer", output.items[0].title)
         self.assertEqual("Older", output.items[1].title)
         self.assertEqual("Example", output.items[0].name)
-        self.assertEqual("tech", output.items[0].category)
 
     def test_deduplicates_by_link(self):
         source = FeedSource(source_url="https://example.com/feed.xml", source_name="Example")
@@ -133,7 +132,6 @@ class ProcessingTests(unittest.TestCase):
                         "link": "https://example.com/first",
                         "published": "2026-03-13 10:00:00",
                         "name": "Example",
-                        "category": None,
                         "avatar": None,
                         "feed_domain": "example.com",
                     })()
@@ -144,7 +142,6 @@ class ProcessingTests(unittest.TestCase):
                         "link": "https://example.com/second",
                         "published": "2026-03-13 09:00:00",
                         "name": "Example",
-                        "category": None,
                         "avatar": None,
                         "feed_domain": "example.com",
                     })()

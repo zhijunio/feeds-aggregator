@@ -93,7 +93,6 @@ def normalize_document(document: RawFeedDocument, *, timezone_name: str) -> list
                 link=entry.link.strip(),
                 published=format_datetime(published_dt, timezone=timezone),
                 name=name,
-                category=document.source.category,
                 avatar=avatar,
                 feed_domain=feed_domain,
                 source_key=source_key,

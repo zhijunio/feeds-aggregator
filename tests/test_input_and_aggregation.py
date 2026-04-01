@@ -138,7 +138,7 @@ class InputAndAggregationTests(unittest.TestCase):
         self.assertEqual("https://www.youtube.com", request.headers["Referer"])
         self.assertEqual("no-cache", request.headers["Cache-control"])
 
-    def test_load_text_sources_with_category(self):
+    def test_load_text_sources_comma_line_uses_url_suffix_only(self):
         with TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "sources.txt"
             path.write_text("tech,https://feeds.example.com/rss.xml\n", encoding="utf-8")
@@ -146,7 +146,7 @@ class InputAndAggregationTests(unittest.TestCase):
 
         self.assertEqual("txt", result.format_name)
         self.assertEqual(1, len(result.sources))
-        self.assertEqual("tech", result.sources[0].category)
+        self.assertEqual("https://feeds.example.com/rss.xml", result.sources[0].source_url)
 
     def test_load_opml_sources(self):
         with TemporaryDirectory() as tmpdir:
@@ -161,10 +161,9 @@ class InputAndAggregationTests(unittest.TestCase):
 
         self.assertEqual("opml", result.format_name)
         self.assertEqual(1, len(result.sources))
-        self.assertEqual("Blogs", result.sources[0].category)
         self.assertEqual("Sample", result.sources[0].source_name)
 
-    def test_load_opml_sources_with_outline_category_attribute(self):
+    def test_load_opml_sources_ignores_outline_category_attribute(self):
         with TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "sources.opml"
             path.write_text(
@@ -177,13 +176,12 @@ class InputAndAggregationTests(unittest.TestCase):
 
         self.assertEqual("opml", result.format_name)
         self.assertEqual(1, len(result.sources))
-        self.assertEqual("tech", result.sources[0].category)
         self.assertEqual("Sample", result.sources[0].source_name)
 
     def test_aggregate_sources_handles_partial_failure(self):
         sources = [
-            FeedSource(source_url="https://feeds.example.com/rss.xml", category="blog"),
-            FeedSource(source_url="https://feeds.example.com/missing.xml", category="blog"),
+            FeedSource(source_url="https://feeds.example.com/rss.xml"),
+            FeedSource(source_url="https://feeds.example.com/missing.xml"),
         ]
 
         with patch("feeds_aggregator.aggregator.urlopen", side_effect=build_mock_response):
@@ -197,7 +195,7 @@ class InputAndAggregationTests(unittest.TestCase):
 
     def test_aggregate_sources_parses_atom_avatar(self):
         sources = [
-            FeedSource(source_url="https://feeds.example.com/atom.xml", category="blog"),
+            FeedSource(source_url="https://feeds.example.com/atom.xml"),
         ]
 
         with patch("feeds_aggregator.aggregator.urlopen", side_effect=build_mock_response):
@@ -217,7 +215,7 @@ class InputAndAggregationTests(unittest.TestCase):
 
     def test_aggregate_sources_sanitizes_invalid_xml_control_characters(self):
         sources = [
-            FeedSource(source_url="https://feeds.example.com/broken.xml", category="blog"),
+            FeedSource(source_url="https://feeds.example.com/broken.xml"),
         ]
 
         with patch("feeds_aggregator.aggregator.urlopen", side_effect=build_mock_response):
@@ -229,7 +227,7 @@ class InputAndAggregationTests(unittest.TestCase):
 
     def test_aggregate_sources_sanitizes_unescaped_ampersands(self):
         sources = [
-            FeedSource(source_url="https://feeds.example.com/broken-amp.xml", category="blog"),
+            FeedSource(source_url="https://feeds.example.com/broken-amp.xml"),
         ]
 
         with patch("feeds_aggregator.aggregator.urlopen", side_effect=build_mock_response):
@@ -253,7 +251,7 @@ class InputAndAggregationTests(unittest.TestCase):
 
     def test_aggregate_sources_retries_timeout_once_before_success(self):
         sources = [
-            FeedSource(source_url="https://feeds.example.com/rss.xml", category="blog"),
+            FeedSource(source_url="https://feeds.example.com/rss.xml"),
         ]
 
         with patch(
@@ -271,7 +269,7 @@ class InputAndAggregationTests(unittest.TestCase):
 
     def test_aggregate_sources_retries_http_500_once_before_success(self):
         sources = [
-            FeedSource(source_url="https://feeds.example.com/rss.xml", category="blog"),
+            FeedSource(source_url="https://feeds.example.com/rss.xml"),
         ]
 
         with patch(
@@ -295,7 +293,7 @@ class InputAndAggregationTests(unittest.TestCase):
 
     def test_aggregate_sources_applies_youtube_fetch_delay(self):
         sources = [
-            FeedSource(source_url="https://www.youtube.com/feeds/videos.xml?channel_id=abc123", category="video"),
+            FeedSource(source_url="https://www.youtube.com/feeds/videos.xml?channel_id=abc123"),
         ]
 
         with (

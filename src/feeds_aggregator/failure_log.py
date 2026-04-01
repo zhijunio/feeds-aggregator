@@ -15,7 +15,6 @@ def write_failure_log(failures: list[SourceAggregationFailure], output_path: str
     rows = [
         {
             "source_url": failure.source.source_url,
-            "category": failure.source.category,
             "source_name": failure.source.source_name,
             "error": failure.error,
         }

@@ -7,7 +7,6 @@ from typing import Literal
 @dataclass(slots=True, frozen=True)
 class FeedSource:
     source_url: str
-    category: str | None = None
     source_name: str | None = None
 
 
@@ -68,7 +67,6 @@ class ProcessedItem:
     link: str
     published: str
     name: str
-    category: str | None = None
     avatar: str | None = None
     feed_domain: str | None = None
     source_key: str | None = None

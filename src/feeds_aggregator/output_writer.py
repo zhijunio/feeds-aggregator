@@ -134,7 +134,6 @@ def serialize_output(
                 "link": item.link,
                 "published": item.published,
                 "name": item.name,
-                "category": item.category,
                 "avatar": format_avatar_public_path(
                     item.avatar, public_prefix=avatar_public_prefix
                 ),

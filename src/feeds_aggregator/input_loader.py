@@ -68,16 +68,10 @@ def parse_text_sources(content: str) -> list[FeedSource]:
 
     for source_line in iter_source_lines(content):
         raw = source_line.raw_value
-        category: str | None = None
-        url = raw
-
-        if "," in raw:
-            category_part, url_part = raw.split(",", 1)
-            category = normalize_optional_value(category_part)
-            url = url_part.strip()
+        url = raw.split(",", 1)[1].strip() if "," in raw else raw
 
         validate_url(url, context=f"line {source_line.line_number}")
-        sources.append(FeedSource(source_url=url, category=category))
+        sources.append(FeedSource(source_url=url))
 
     return sources
 
@@ -106,35 +100,26 @@ def parse_opml_sources(content: str) -> list[FeedSource]:
         raise InputValidationError("OPML input must contain a <body> element")
 
     sources: list[FeedSource] = []
-    walk_opml_nodes(body, [], sources)
+    walk_opml_nodes(body, sources)
     return sources
 
 
-def walk_opml_nodes(node: ET.Element, category_stack: list[str], sources: list[FeedSource]) -> None:
+def walk_opml_nodes(node: ET.Element, sources: list[FeedSource]) -> None:
     for child in list(node):
         child_text = normalize_optional_value(child.attrib.get("text") or child.attrib.get("title"))
-        explicit_category = normalize_opml_category(child.attrib.get("category"))
         xml_url = normalize_optional_value(child.attrib.get("xmlUrl"))
-
-        next_stack = category_stack
-        if xml_url is None:
-            inherited_category = explicit_category or child_text
-            if inherited_category:
-                next_stack = [*category_stack, inherited_category]
 
         if xml_url:
             validate_url(xml_url, context=f"OPML outline '{child_text or xml_url}'")
-            category = explicit_category or (next_stack[-1] if next_stack else None)
             sources.append(
                 FeedSource(
                     source_url=xml_url,
-                    category=category,
                     source_name=child_text,
                 )
             )
 
         if list(child):
-            walk_opml_nodes(child, next_stack, sources)
+            walk_opml_nodes(child, sources)
 
 
 def normalize_optional_value(value: str | None) -> str | None:
@@ -142,16 +127,6 @@ def normalize_optional_value(value: str | None) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
-
-
-def normalize_opml_category(value: str | None) -> str | None:
-    normalized = normalize_optional_value(value)
-    if normalized is None:
-        return None
-    if "," not in normalized:
-        return normalized
-    first = normalized.split(",", 1)[0].strip()
-    return first or None
 
 
 def validate_url(url: str, *, context: str) -> None:
