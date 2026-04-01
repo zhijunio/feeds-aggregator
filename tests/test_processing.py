@@ -132,7 +132,7 @@ class ProcessingTests(unittest.TestCase):
                         "link": "https://example.com/first",
                         "published": "2026-03-13 10:00:00",
                         "name": "Example",
-                        "avatar": None,
+                        "favicon": None,
                         "feed_domain": "example.com",
                     })()
                 ],
@@ -142,7 +142,7 @@ class ProcessingTests(unittest.TestCase):
                         "link": "https://example.com/second",
                         "published": "2026-03-13 09:00:00",
                         "name": "Example",
-                        "avatar": None,
+                        "favicon": None,
                         "feed_domain": "example.com",
                     })()
                 ],
@@ -212,7 +212,7 @@ class ProcessingTests(unittest.TestCase):
                 RawFeedDocument(
                     source=source,
                     title="Example Feed",
-                    avatar="https://cdn.example.com/icon.png",
+                    favicon="https://cdn.example.com/icon.png",
                     entries=[
                         RawFeedEntry(
                             title="Post",
@@ -226,7 +226,7 @@ class ProcessingTests(unittest.TestCase):
 
         output = process_aggregation_result(result)
 
-        self.assertEqual("https://cdn.example.com/icon.png", output.items[0].avatar)
+        self.assertEqual("https://cdn.example.com/icon.png", output.items[0].favicon)
 
     def test_preserves_feed_homepage_for_avatar_discovery(self):
         source = FeedSource(source_url="https://feeds.feedburner.com/example", source_name="Example")
@@ -271,7 +271,7 @@ class ProcessingTests(unittest.TestCase):
 
         output = process_aggregation_result(result)
 
-        self.assertIsNone(output.items[0].avatar)
+        self.assertIsNone(output.items[0].favicon)
 
 
 if __name__ == "__main__":

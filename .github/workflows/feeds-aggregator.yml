@@ -22,8 +22,8 @@ on:
         required: false
         type: string
         default: "15"
-      avatar-delay-ms:
-        description: Delay between avatar discovery/download requests in milliseconds
+      favicon-delay-ms:
+        description: Delay between favicon discovery/download requests in milliseconds
         required: false
         type: string
         default: "200"
@@ -47,13 +47,13 @@ on:
         required: false
         type: string
         default: ""
-      avatar-dir:
-        description: Directory to store downloaded avatar images
+      favicon-dir:
+        description: Directory to store downloaded favicon images
         required: false
         type: string
         default: ""
-      avatar-public-prefix:
-        description: Root-relative URL prefix for local avatars in JSON (e.g. /images/_favicons)
+      favicon-public-prefix:
+        description: Root-relative URL prefix for local favicons in JSON (e.g. /images/_favicons)
         required: false
         type: string
         default: ""
@@ -87,12 +87,12 @@ jobs:
           output: ${{ inputs.output }}
           workers: ${{ inputs.workers }}
           timeout: ${{ inputs.timeout }}
-          avatar-delay-ms: ${{ inputs.avatar-delay-ms }}
+          favicon-delay-ms: ${{ inputs.favicon-delay-ms }}
           max-items-per-source: ${{ inputs.max-items-per-source }}
           max-total-items: ${{ inputs.max-total-items }}
           max-days: ${{ inputs.max-days }}
           timezone: ${{ inputs.timezone }}
-          avatar-dir: ${{ inputs.avatar-dir }}
-          avatar-public-prefix: ${{ inputs.avatar-public-prefix }}
+          favicon-dir: ${{ inputs.favicon-dir }}
+          favicon-public-prefix: ${{ inputs.favicon-public-prefix }}
           failure-log: ${{ inputs.failure-log }}
           validate-only: ${{ inputs.validate-only }}

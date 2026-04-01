@@ -17,8 +17,8 @@ inputs:
     description: Per-source request timeout in seconds
     required: false
     default: "15"
-  avatar-delay-ms:
-    description: Delay between avatar discovery/download requests in milliseconds
+  favicon-delay-ms:
+    description: Delay between favicon discovery/download requests in milliseconds
     required: false
     default: "200"
   max-items-per-source:
@@ -37,12 +37,12 @@ inputs:
     description: IANA timezone for output timestamps
     required: false
     default: "UTC"
-  avatar-dir:
-    description: Directory to store downloaded avatar images
+  favicon-dir:
+    description: Directory to store downloaded favicon images
     required: false
     default: ""
-  avatar-public-prefix:
-    description: Root-relative URL prefix for local avatar filenames in JSON (e.g. /images/_favicons); empty keeps basename only
+  favicon-public-prefix:
+    description: Root-relative URL prefix for local favicon filenames in JSON (e.g. /images/_favicons); empty keeps basename only
     required: false
     default: ""
   failure-log:
@@ -76,13 +76,13 @@ runs:
         )
         if [ -n "${{ inputs.workers }}" ]; then args+=(--workers "${{ inputs.workers }}"); fi
         if [ -n "${{ inputs.timeout }}" ]; then args+=(--timeout "${{ inputs.timeout }}"); fi
-        if [ -n "${{ inputs.avatar-delay-ms }}" ]; then args+=(--avatar-delay-ms "${{ inputs.avatar-delay-ms }}"); fi
+        if [ -n "${{ inputs.favicon-delay-ms }}" ]; then args+=(--favicon-delay-ms "${{ inputs.favicon-delay-ms }}"); fi
         if [ -n "${{ inputs.max-items-per-source }}" ]; then args+=(--max-items-per-source "${{ inputs.max-items-per-source }}"); fi
         if [ -n "${{ inputs.max-total-items }}" ]; then args+=(--max-total-items "${{ inputs.max-total-items }}"); fi
         if [ -n "${{ inputs.max-days }}" ]; then args+=(--max-days "${{ inputs.max-days }}"); fi
         if [ -n "${{ inputs.timezone }}" ]; then args+=(--timezone "${{ inputs.timezone }}"); fi
-        if [ -n "${{ inputs.avatar-dir }}" ]; then args+=(--avatar-dir "${{ inputs.avatar-dir }}"); fi
-        if [ -n "${{ inputs.avatar-public-prefix }}" ]; then args+=(--avatar-public-prefix "${{ inputs.avatar-public-prefix }}"); fi
+        if [ -n "${{ inputs.favicon-dir }}" ]; then args+=(--favicon-dir "${{ inputs.favicon-dir }}"); fi
+        if [ -n "${{ inputs.favicon-public-prefix }}" ]; then args+=(--favicon-public-prefix "${{ inputs.favicon-public-prefix }}"); fi
         if [ -n "${{ inputs.failure-log }}" ]; then args+=(--failure-log "${{ inputs.failure-log }}"); fi
         if [ "${{ inputs.validate-only }}" = "true" ]; then args+=(--validate-only); fi
         feeds-aggregator "${args[@]}"

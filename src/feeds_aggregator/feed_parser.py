@@ -46,7 +46,7 @@ def parse_rss(source: FeedSource, root: ET.Element) -> RawFeedDocument:
         raise AggregationError("RSS feed is missing <channel>")
 
     title = find_child_text(channel, "title") or source.source_name
-    avatar = find_rss_avatar(channel)
+    favicon = find_rss_favicon(channel)
     homepage_url = normalize_homepage_url(find_child_text(channel, "link"), source.source_url)
     entries: list[RawFeedEntry] = []
     for item in channel.findall("item"):
@@ -63,12 +63,12 @@ def parse_rss(source: FeedSource, root: ET.Element) -> RawFeedDocument:
             )
         )
 
-    return RawFeedDocument(source=source, title=title, entries=entries, avatar=avatar, homepage_url=homepage_url)
+    return RawFeedDocument(source=source, title=title, entries=entries, favicon=favicon, homepage_url=homepage_url)
 
 
 def parse_atom(source: FeedSource, root: ET.Element) -> RawFeedDocument:
     title = find_child_text(root, f"{ATOM_NS}title") or source.source_name
-    avatar = find_atom_avatar(root)
+    favicon = find_atom_favicon(root)
     homepage_url = normalize_homepage_url(find_atom_link(root), source.source_url)
     entries: list[RawFeedEntry] = []
 
@@ -86,7 +86,7 @@ def parse_atom(source: FeedSource, root: ET.Element) -> RawFeedDocument:
             )
         )
 
-    return RawFeedDocument(source=source, title=title, entries=entries, avatar=avatar, homepage_url=homepage_url)
+    return RawFeedDocument(source=source, title=title, entries=entries, favicon=favicon, homepage_url=homepage_url)
 
 
 def find_atom_link(entry: ET.Element) -> str | None:
@@ -116,7 +116,7 @@ def normalize_tag(tag: str) -> str:
     return tag
 
 
-def find_rss_avatar(channel: ET.Element) -> str | None:
+def find_rss_favicon(channel: ET.Element) -> str | None:
     image = channel.find("image")
     if image is not None:
         candidate = normalize_optional_url(find_child_text(image, "url"))
@@ -134,7 +134,7 @@ def find_rss_avatar(channel: ET.Element) -> str | None:
     return None
 
 
-def find_atom_avatar(root: ET.Element) -> str | None:
+def find_atom_favicon(root: ET.Element) -> str | None:
     for tag_name in (f"{ATOM_NS}icon", f"{ATOM_NS}logo"):
         candidate = normalize_optional_url(find_child_text(root, tag_name))
         if candidate:

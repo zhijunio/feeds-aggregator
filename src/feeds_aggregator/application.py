@@ -26,9 +26,9 @@ class RunAggregationRequest:
     max_total_items: int
     max_days: int
     timezone_name: str
-    avatar_delay_ms: int = 200
-    avatar_dir: str | None = None
-    avatar_public_prefix: str | None = None
+    favicon_delay_ms: int = 200
+    favicon_dir: str | None = None
+    favicon_public_prefix: str | None = None
     failure_log_path: str | None = None
     validate_only: bool = False
 
@@ -58,7 +58,7 @@ def run_aggregation(request: RunAggregationRequest) -> RunAggregationResult:
             successful_sources=0,
             failed_sources=0,
             output_items=0,
-            downloaded_avatars=0,
+            downloaded_favicons=0,
             duration_seconds=duration_seconds,
             failures=[],
         )
@@ -84,8 +84,8 @@ def run_aggregation(request: RunAggregationRequest) -> RunAggregationResult:
         aggregation_config=AggregationConfig(timeout_seconds=request.timeout_seconds, workers=request.workers),
         processing_config=processing_config,
         output_path=request.output_path,
-        avatar_dir=request.avatar_dir,
-        avatar_delay_ms=request.avatar_delay_ms,
+        favicon_dir=request.favicon_dir,
+        favicon_delay_ms=request.favicon_delay_ms,
     )
     processed = build_processed_output(source_items, config=processing_config, now=now)
 
@@ -98,7 +98,7 @@ def run_aggregation(request: RunAggregationRequest) -> RunAggregationResult:
                 write_output_file(
                     processed,
                     request.output_path,
-                    avatar_public_prefix=request.avatar_public_prefix,
+                    favicon_public_prefix=request.favicon_public_prefix,
                 )
             )
             output_written = True

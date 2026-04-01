@@ -47,7 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", default="data/feeds.json", help="Path to the output result file")
     parser.add_argument("--workers", type=positive_int, default=8, help="Concurrent source workers")
     parser.add_argument("--timeout", type=positive_float, default=15.0, help="Per-source request timeout in seconds")
-    parser.add_argument("--avatar-delay-ms", type=non_negative_int, default=200, help="Delay between avatar discovery/download requests in milliseconds")
+    parser.add_argument("--favicon-delay-ms", type=non_negative_int, default=200, help="Delay between favicon discovery/download requests in milliseconds")
     parser.add_argument(
         "--max-items-per-source",
         type=non_negative_int,
@@ -67,11 +67,11 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Keep only items from recent days (default: {DEFAULT_MAX_DAYS})",
     )
     parser.add_argument("--timezone", default=DEFAULT_TIMEZONE, help=f"IANA timezone for output timestamps (default: {DEFAULT_TIMEZONE})")
-    parser.add_argument("--avatar-dir", default="", help="Directory to store downloaded avatar images (default: <output-dir>/avatars)")
+    parser.add_argument("--favicon-dir", default="", help="Directory to store downloaded favicon images (default: <output-dir>/favicons)")
     parser.add_argument(
-        "--avatar-public-prefix",
+        "--favicon-public-prefix",
         default="",
-        help="Root-relative URL prefix prepended to local avatar filenames in JSON (e.g. /images/_favicons); empty keeps basename only",
+        help="Root-relative URL prefix prepended to local favicon filenames in JSON (e.g. /images/_favicons); empty keeps basename only",
     )
     parser.add_argument("--failure-log", default="", help="Optional JSON file path for writing failed feed details")
     parser.add_argument("--validate-only", action="store_true", help="Validate inputs and configuration without fetching feeds or writing output")
@@ -91,13 +91,13 @@ def main() -> int:
                 output_path=args.output,
                 workers=args.workers,
                 timeout_seconds=args.timeout,
-                avatar_delay_ms=args.avatar_delay_ms,
+                favicon_delay_ms=args.favicon_delay_ms,
                 max_items_per_source=args.max_items_per_source,
                 max_total_items=args.max_total_items,
                 max_days=args.max_days,
                 timezone_name=args.timezone,
-                avatar_dir=args.avatar_dir or None,
-                avatar_public_prefix=args.avatar_public_prefix or None,
+                favicon_dir=args.favicon_dir or None,
+                favicon_public_prefix=args.favicon_public_prefix or None,
                 failure_log_path=args.failure_log or None,
                 validate_only=args.validate_only,
             )
@@ -119,12 +119,12 @@ def main() -> int:
     if result.failure_log_path is not None:
         logger.info("Failure log written to %s", result.failure_log_path)
     logger.info(
-        "Run finished with outcome=%s, sources=%d, failures=%d, items=%d, avatars=%d, duration=%.3fs",
+        "Run finished with outcome=%s, sources=%d, failures=%d, items=%d, favicons=%d, duration=%.3fs",
         result.report.outcome,
         result.report.total_sources,
         result.report.failed_sources,
         result.report.output_items,
-        result.report.downloaded_avatars,
+        result.report.downloaded_favicons,
         result.report.duration_seconds,
     )
 
@@ -173,7 +173,7 @@ def build_summary_payload(
         "successful_sources": report.successful_sources,
         "failed_sources": report.failed_sources,
         "output_items": report.output_items,
-        "downloaded_avatars": report.downloaded_avatars,
+        "downloaded_favicons": report.downloaded_favicons,
         "duration_seconds": round(report.duration_seconds, 3),
         "output_path": output_path,
         "failure_log_path": failure_log_path,

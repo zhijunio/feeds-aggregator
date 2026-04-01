@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 import re
 from time import sleep
-from typing import Callable, Iterable
+from typing import Callable, Iterable, TypeVar
 from urllib.parse import parse_qs, urljoin, urlparse
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -20,11 +20,11 @@ from PIL import Image
 from .models import ProcessedItem, ProcessedOutput
 from .url_utils import normalize_http_url
 
-DEFAULT_AVATAR_DIR_NAME = "avatars"
-DEFAULT_AVATAR_TIMEOUT_SECONDS = 10.0
-DEFAULT_AVATAR_WORKERS = 8
-DEFAULT_AVATAR_DELAY_MS = 200
-DEFAULT_AVATAR_DOWNLOAD_ATTEMPTS = 2
+DEFAULT_FAVICON_DIR_NAME = "favicons"
+DEFAULT_FAVICON_TIMEOUT_SECONDS = 10.0
+DEFAULT_FAVICON_WORKERS = 8
+DEFAULT_FAVICON_DELAY_MS = 200
+DEFAULT_FAVICON_DOWNLOAD_ATTEMPTS = 2
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -33,8 +33,11 @@ DEFAULT_USER_AGENT = (
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T")
+R = TypeVar("R")
 
-class AvatarLinkParser(HTMLParser):
+
+class FaviconLinkParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
         self._candidates_by_priority: dict[int, list[str]] = {}
@@ -55,7 +58,7 @@ class AvatarLinkParser(HTMLParser):
             return
 
         rel_tokens = {token.strip().lower() for token in attributes.get("rel", "").split()}
-        priority = resolve_link_avatar_priority(rel_tokens)
+        priority = resolve_link_icon_priority(rel_tokens)
         if priority < 0:
             return
 
@@ -64,7 +67,7 @@ class AvatarLinkParser(HTMLParser):
             self._add_candidate(href, priority=priority)
 
     @property
-    def avatar_urls(self) -> list[str]:
+    def favicon_urls(self) -> list[str]:
         candidates: list[str] = []
         seen: set[str] = set()
         for priority in sorted(self._candidates_by_priority, reverse=True):
@@ -79,7 +82,7 @@ class AvatarLinkParser(HTMLParser):
         self._candidates_by_priority.setdefault(priority, []).append(value)
 
 
-def resolve_link_avatar_priority(rel_tokens: set[str]) -> int:
+def resolve_link_icon_priority(rel_tokens: set[str]) -> int:
     if rel_tokens.intersection({"icon", "shortcut"}):
         return 3
     if "image_src" in rel_tokens:
@@ -89,13 +92,13 @@ def resolve_link_avatar_priority(rel_tokens: set[str]) -> int:
     return -1
 
 
-def format_avatar_public_path(avatar: str | None, *, public_prefix: str | None) -> str | None:
-    """将落盘后的本地 avatar 文件名转为写入 JSON 的公共路径（根相对或保持外链）。"""
-    if avatar is None:
+def format_favicon_public_path(favicon: str | None, *, public_prefix: str | None) -> str | None:
+    """将落盘后的本地 favicon 文件名转为写入 JSON 的公共路径（根相对或保持外链）。"""
+    if favicon is None:
         return None
-    a = str(avatar).strip()
+    a = str(favicon).strip()
     if not a:
-        return avatar
+        return None
     if a.startswith(("http://", "https://", "/")):
         return a
     prefix = (public_prefix or "").strip().rstrip("/")
@@ -108,14 +111,14 @@ def write_output_file(
     output: ProcessedOutput,
     output_path: str | Path,
     *,
-    avatar_public_prefix: str | None = None,
+    favicon_public_prefix: str | None = None,
 ) -> Path:
     path = Path(output_path)
     if path.exists() and path.is_dir():
         raise OSError(f"Output path is a directory: {path}")
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = serialize_output(output, avatar_public_prefix=avatar_public_prefix)
+    payload = serialize_output(output, favicon_public_prefix=favicon_public_prefix)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     logger.info("Wrote output file to %s with %d items", path, len(output.items))
     return path
@@ -124,7 +127,7 @@ def write_output_file(
 def serialize_output(
     output: ProcessedOutput,
     *,
-    avatar_public_prefix: str | None = None,
+    favicon_public_prefix: str | None = None,
 ) -> dict[str, object]:
     formatted = apply_output_formatting(output)
     return {
@@ -134,8 +137,8 @@ def serialize_output(
                 "link": item.link,
                 "published": item.published,
                 "name": item.name,
-                "avatar": format_avatar_public_path(
-                    item.avatar, public_prefix=avatar_public_prefix
+                "favicon": format_favicon_public_path(
+                    item.favicon, public_prefix=favicon_public_prefix
                 ),
             }
             for item in formatted.items
@@ -144,19 +147,19 @@ def serialize_output(
     }
 
 
-def persist_avatars(
+def persist_favicons(
     output: ProcessedOutput,
     *,
     output_path: str | Path,
-    avatar_dir: str | Path | None = None,
-    timeout_seconds: float = DEFAULT_AVATAR_TIMEOUT_SECONDS,
-    workers: int = DEFAULT_AVATAR_WORKERS,
-    delay_ms: int = DEFAULT_AVATAR_DELAY_MS,
+    favicon_dir: str | Path | None = None,
+    timeout_seconds: float = DEFAULT_FAVICON_TIMEOUT_SECONDS,
+    workers: int = DEFAULT_FAVICON_WORKERS,
+    delay_ms: int = DEFAULT_FAVICON_DELAY_MS,
 ) -> ProcessedOutput:
-    new_items = persist_item_avatars(
+    new_items = persist_item_favicons(
         output.items,
         output_path=output_path,
-        avatar_dir=avatar_dir,
+        favicon_dir=favicon_dir,
         timeout_seconds=timeout_seconds,
         workers=workers,
         delay_ms=delay_ms,
@@ -164,46 +167,46 @@ def persist_avatars(
     return ProcessedOutput(items=new_items, updated=output.updated)
 
 
-def persist_item_avatars(
+def persist_item_favicons(
     items: list[ProcessedItem],
     *,
     output_path: str | Path,
-    avatar_dir: str | Path | None = None,
-    timeout_seconds: float = DEFAULT_AVATAR_TIMEOUT_SECONDS,
-    workers: int = DEFAULT_AVATAR_WORKERS,
-    delay_ms: int = DEFAULT_AVATAR_DELAY_MS,
+    favicon_dir: str | Path | None = None,
+    timeout_seconds: float = DEFAULT_FAVICON_TIMEOUT_SECONDS,
+    workers: int = DEFAULT_FAVICON_WORKERS,
+    delay_ms: int = DEFAULT_FAVICON_DELAY_MS,
 ) -> list[ProcessedItem]:
     output_file = Path(output_path)
-    avatar_root = Path(avatar_dir) if avatar_dir else output_file.parent / DEFAULT_AVATAR_DIR_NAME
+    favicon_root = Path(favicon_dir) if favicon_dir else output_file.parent / DEFAULT_FAVICON_DIR_NAME
     discovery_requests: dict[str, str] = {}
     for item in items:
-        if (item.avatar or "").strip():
+        if (item.favicon or "").strip():
             continue
         discovery_key = build_discovery_key(item)
-        discovery_requests.setdefault(discovery_key, build_avatar_discovery_url(item))
+        discovery_requests.setdefault(discovery_key, build_favicon_discovery_url(item))
 
     discovery_targets = list(discovery_requests)
     discovery_cache = run_in_parallel(
         discovery_targets,
-        lambda key: discover_avatar_urls(discovery_requests[key], timeout_seconds=timeout_seconds, delay_ms=delay_ms),
+        lambda key: discover_favicon_urls(discovery_requests[key], timeout_seconds=timeout_seconds, delay_ms=delay_ms),
         workers=workers,
     )
-    avatar_targets = unique_values(
+    favicon_targets = unique_values(
         (
-            build_avatar_candidate_list(item, discovery_cache.get(build_discovery_key(item)) or []),
+            build_favicon_candidate_list(item, discovery_cache.get(build_discovery_key(item)) or []),
             item.feed_domain,
             build_discovery_key(item),
         )
         for item in items
     )
-    avatar_targets = [target for target in avatar_targets if target[0]]
-    avatar_cache = run_in_parallel(
-        avatar_targets,
-        lambda target: download_avatar(
+    favicon_targets = [target for target in favicon_targets if target[0]]
+    favicon_cache = run_in_parallel(
+        favicon_targets,
+        lambda target: download_favicon(
             target[0],
             feed_domain=target[1],
             source_identity=target[2],
-            avatar_root=avatar_root,
+            favicon_root=favicon_root,
             timeout_seconds=timeout_seconds,
             delay_ms=delay_ms,
         ),
@@ -212,15 +215,15 @@ def persist_item_avatars(
 
     new_items = []
     for item in items:
-        source_avatar_urls = build_avatar_candidate_list(item, discovery_cache.get(build_discovery_key(item)) or [])
-        if not source_avatar_urls:
+        source_favicon_urls = build_favicon_candidate_list(item, discovery_cache.get(build_discovery_key(item)) or [])
+        if not source_favicon_urls:
             new_items.append(item)
             continue
 
-        filename = avatar_cache[(source_avatar_urls, item.feed_domain, build_discovery_key(item))]
-        fallback_avatar = source_avatar_urls[0]
-        local_avatar = filename if filename is not None else fallback_avatar
-        new_items.append(replace(item, avatar=local_avatar))
+        filename = favicon_cache[(source_favicon_urls, item.feed_domain, build_discovery_key(item))]
+        fallback_favicon = source_favicon_urls[0]
+        local_favicon = filename if filename is not None else fallback_favicon
+        new_items.append(replace(item, favicon=local_favicon))
 
     return new_items
 
@@ -229,13 +232,13 @@ def build_discovery_key(item) -> str:
     return item.source_key or item.link
 
 
-def build_avatar_candidate_list(item: ProcessedItem, discovered_urls: list[str]) -> tuple[str, ...]:
+def build_favicon_candidate_list(item: ProcessedItem, discovered_urls: list[str]) -> tuple[str, ...]:
     candidates: list[str] = []
     seen: set[str] = set()
-    explicit_avatar = normalize_avatar_url(item.avatar)
-    if explicit_avatar is not None:
-        candidates.append(explicit_avatar)
-        seen.add(explicit_avatar)
+    explicit = normalize_favicon_url(item.favicon)
+    if explicit is not None:
+        candidates.append(explicit)
+        seen.add(explicit)
     for url in discovered_urls:
         if url in seen:
             continue
@@ -244,15 +247,15 @@ def build_avatar_candidate_list(item: ProcessedItem, discovered_urls: list[str])
     return tuple(candidates)
 
 
-def build_avatar_discovery_url(item: ProcessedItem) -> str:
+def build_favicon_discovery_url(item: ProcessedItem) -> str:
     if item.source_homepage:
         return item.source_homepage
     youtube_channel_url = build_youtube_channel_url(item.source_key)
     if youtube_channel_url is not None:
         return youtube_channel_url
-    explicit_avatar = normalize_avatar_url(item.avatar)
-    if explicit_avatar is not None:
-        return explicit_avatar
+    explicit = normalize_favicon_url(item.favicon)
+    if explicit is not None:
+        return explicit
     return item.link
 
 
@@ -275,7 +278,7 @@ def build_youtube_channel_url(source_key: str | None) -> str | None:
 def run_in_parallel(values: list[T], worker: Callable[[T], R], *, workers: int) -> dict[T, R]:
     if not values:
         return {}
-    # workers=1: 与调用方同线程顺序执行，保证「抓取→标准化→avatar」在同一 worker 内闭环
+    # workers=1: 与调用方同线程顺序执行，保证「抓取→标准化→favicon」在同一 worker 内闭环
     if workers <= 1:
         return {v: worker(v) for v in values}
     worker_count = min(workers, len(values))
@@ -366,7 +369,7 @@ def probe_favicon_url(page_url: str, *, timeout_seconds: float, delay_ms: int) -
         return None
 
 
-def discover_avatar_urls(page_url: str, *, timeout_seconds: float, delay_ms: int) -> list[str]:
+def discover_favicon_urls(page_url: str, *, timeout_seconds: float, delay_ms: int) -> list[str]:
     parsed = urlparse(page_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         return []
@@ -377,54 +380,54 @@ def discover_avatar_urls(page_url: str, *, timeout_seconds: float, delay_ms: int
         with urlopen(request, timeout=timeout_seconds) as response:
             status_code = getattr(response, "status", 200)
             if status_code < 200 or status_code >= 300:
-                logger.warning("Avatar discovery returned HTTP %s for %s", status_code, page_url)
-                return fallback_avatar_urls(page_url, timeout_seconds=timeout_seconds, delay_ms=delay_ms)
+                logger.warning("Favicon discovery returned HTTP %s for %s", status_code, page_url)
+                return fallback_favicon_urls(page_url, timeout_seconds=timeout_seconds, delay_ms=delay_ms)
             content_type = response.headers.get_content_type()
             if content_type not in {"text/html", "application/xhtml+xml"}:
-                return fallback_avatar_urls(page_url, timeout_seconds=timeout_seconds, delay_ms=delay_ms)
+                return fallback_favicon_urls(page_url, timeout_seconds=timeout_seconds, delay_ms=delay_ms)
             charset = response.headers.get_content_charset() or "utf-8"
             payload = response.read()
     except Exception as exc:
-        logger.warning("Avatar discovery failed for %s: %s", page_url, exc)
-        return fallback_avatar_urls(page_url, timeout_seconds=timeout_seconds, delay_ms=delay_ms)
+        logger.warning("Favicon discovery failed for %s: %s", page_url, exc)
+        return fallback_favicon_urls(page_url, timeout_seconds=timeout_seconds, delay_ms=delay_ms)
 
     try:
         html_text = payload.decode(charset, errors="replace")
     except LookupError:
         html_text = payload.decode("utf-8", errors="replace")
 
-    parser = AvatarLinkParser()
+    parser = FaviconLinkParser()
     parser.feed(html_text)
     candidates: list[str] = []
-    for raw_url in parser.avatar_urls:
+    for raw_url in parser.favicon_urls:
         resolved = urljoin(page_url, raw_url)
-        normalized = normalize_avatar_url(resolved)
+        normalized = normalize_favicon_url(resolved)
         if normalized is None:
-            logger.warning("Avatar discovery found invalid icon URL on %s: %s", page_url, raw_url)
+            logger.warning("Favicon discovery found invalid icon URL on %s: %s", page_url, raw_url)
             continue
         candidates.append(normalized)
     if not candidates:
-        return fallback_avatar_urls(page_url, timeout_seconds=timeout_seconds, delay_ms=delay_ms)
-    return prioritize_avatar_candidates(page_url, candidates)
+        return fallback_favicon_urls(page_url, timeout_seconds=timeout_seconds, delay_ms=delay_ms)
+    return prioritize_favicon_candidates(page_url, candidates)
 
 
-def fallback_avatar_urls(page_url: str, *, timeout_seconds: float, delay_ms: int) -> list[str]:
+def fallback_favicon_urls(page_url: str, *, timeout_seconds: float, delay_ms: int) -> list[str]:
     favicon_url = probe_favicon_url(page_url, timeout_seconds=timeout_seconds, delay_ms=delay_ms)
     if favicon_url is None:
         return []
     return [favicon_url]
 
 
-def prioritize_avatar_candidates(page_url: str, candidates: list[str]) -> list[str]:
+def prioritize_favicon_candidates(page_url: str, candidates: list[str]) -> list[str]:
     page_parsed = urlparse(page_url)
     if page_parsed.hostname not in {"youtube.com", "www.youtube.com"} or not page_parsed.path.startswith("/channel/"):
         return candidates
 
     def sort_key(candidate: str) -> tuple[int, int]:
         candidate_host = (urlparse(candidate).hostname or "").lower()
-        is_channel_avatar = candidate_host.endswith("googleusercontent.com")
+        is_channel_favicon = candidate_host.endswith("googleusercontent.com")
         is_site_icon = candidate_host in {"youtube.com", "www.youtube.com"}
-        if is_channel_avatar:
+        if is_channel_favicon:
             return (0, 0)
         if is_site_icon:
             return (2, 0)
@@ -433,38 +436,38 @@ def prioritize_avatar_candidates(page_url: str, candidates: list[str]) -> list[s
     return sorted(candidates, key=sort_key)
 
 
-def download_avatar(
-    avatar_urls: tuple[str, ...],
+def download_favicon(
+    favicon_urls: tuple[str, ...],
     *,
     feed_domain: str | None,
     source_identity: str,
-    avatar_root: Path,
+    favicon_root: Path,
     timeout_seconds: float,
     delay_ms: int,
 ) -> str | None:
-    for avatar_url in avatar_urls:
-        parsed = urlparse(avatar_url)
+    for favicon_url in favicon_urls:
+        parsed = urlparse(favicon_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             continue
 
         url_extension = resolve_url_extension(parsed.path)
         if url_extension is not None:
-            filename = build_avatar_filename(feed_domain or parsed.hostname or parsed.netloc, source_identity, url_extension)
-            avatar_path = avatar_root / filename
-            if avatar_path.exists():
+            filename = build_favicon_filename(feed_domain or parsed.hostname or parsed.netloc, source_identity, url_extension)
+            favicon_path = favicon_root / filename
+            if favicon_path.exists():
                 return filename
 
         payload: bytes | None = None
         content_type = ""
-        for attempt in range(1, DEFAULT_AVATAR_DOWNLOAD_ATTEMPTS + 1):
-            request = build_browser_asset_request(avatar_url)
+        for attempt in range(1, DEFAULT_FAVICON_DOWNLOAD_ATTEMPTS + 1):
+            request = build_browser_asset_request(favicon_url)
             maybe_sleep(delay_ms)
             try:
                 with urlopen(request, timeout=timeout_seconds) as response:
                     status_code = getattr(response, "status", 200)
                     if status_code < 200 or status_code >= 300:
-                        logger.warning("Avatar download returned HTTP %s for %s", status_code, avatar_url)
-                        if should_retry_avatar_status(status_code) and attempt < DEFAULT_AVATAR_DOWNLOAD_ATTEMPTS:
+                        logger.warning("Favicon download returned HTTP %s for %s", status_code, favicon_url)
+                        if should_retry_favicon_status(status_code) and attempt < DEFAULT_FAVICON_DOWNLOAD_ATTEMPTS:
                             continue
                         payload = None
                         break
@@ -472,8 +475,8 @@ def download_avatar(
                     content_type = response.headers.get_content_type()
                     break
             except Exception as exc:
-                logger.warning("Avatar download failed for %s: %s", avatar_url, exc)
-                if should_retry_avatar_exception(exc) and attempt < DEFAULT_AVATAR_DOWNLOAD_ATTEMPTS:
+                logger.warning("Favicon download failed for %s: %s", favicon_url, exc)
+                if should_retry_favicon_exception(exc) and attempt < DEFAULT_FAVICON_DOWNLOAD_ATTEMPTS:
                     continue
                 payload = None
                 break
@@ -482,38 +485,38 @@ def download_avatar(
             continue
 
         if not payload:
-            logger.warning("Avatar download returned empty payload for %s", avatar_url)
+            logger.warning("Favicon download returned empty payload for %s", favicon_url)
             continue
 
-        prepared = prepare_avatar_payload(payload)
+        prepared = prepare_favicon_payload(payload)
         if prepared is None:
-            logger.warning("Avatar payload from %s is not a supported SVG/raster icon", avatar_url)
+            logger.warning("Favicon payload from %s is not a supported SVG/raster icon", favicon_url)
             continue
         payload_out, extension = prepared
-        filename = build_avatar_filename(feed_domain or parsed.hostname or parsed.netloc, source_identity, extension)
+        filename = build_favicon_filename(feed_domain or parsed.hostname or parsed.netloc, source_identity, extension)
         try:
-            avatar_root.mkdir(parents=True, exist_ok=True)
-            avatar_path = avatar_root / filename
-            if avatar_path.exists():
+            favicon_root.mkdir(parents=True, exist_ok=True)
+            favicon_path = favicon_root / filename
+            if favicon_path.exists():
                 return filename
-            avatar_path.write_bytes(payload_out)
-            logger.info("Saved avatar for %s to %s", avatar_url, avatar_path)
+            favicon_path.write_bytes(payload_out)
+            logger.info("Saved favicon for %s to %s", favicon_url, favicon_path)
             return filename
         except OSError:
-            logger.exception("Failed to persist avatar for %s", avatar_url)
+            logger.exception("Failed to persist favicon for %s", favicon_url)
             return None
     return None
 
 
-def should_retry_avatar_status(status_code: int) -> bool:
+def should_retry_favicon_status(status_code: int) -> bool:
     return status_code == 429 or 500 <= status_code < 600
 
 
-def should_retry_avatar_exception(exc: Exception) -> bool:
+def should_retry_favicon_exception(exc: Exception) -> bool:
     if isinstance(exc, TimeoutError):
         return True
     if isinstance(exc, HTTPError):
-        return should_retry_avatar_status(exc.code)
+        return should_retry_favicon_status(exc.code)
     message = str(exc).lower()
     return "timed out" in message or "timeout" in message
 
@@ -545,7 +548,7 @@ def resolve_url_extension(path: str) -> str | None:
     return None
 
 
-def normalize_avatar_url(value: str | None) -> str | None:
+def normalize_favicon_url(value: str | None) -> str | None:
     return normalize_http_url(value)
 
 
@@ -584,7 +587,7 @@ def _image_to_ico_bytes(im: Image.Image) -> bytes:
     return out.getvalue()
 
 
-def prepare_avatar_payload(payload: bytes) -> tuple[bytes, str] | None:
+def prepare_favicon_payload(payload: bytes) -> tuple[bytes, str] | None:
     """Keep SVG as-is; normalize ICO/raster (PNG, JPEG, WebP, GIF, …) to ICO bytes."""
     if not payload:
         return None
@@ -594,16 +597,16 @@ def prepare_avatar_payload(payload: bytes) -> tuple[bytes, str] | None:
         im = Image.open(BytesIO(payload))
         im.load()
     except Exception as exc:
-        logger.warning("Avatar bytes are not a decodable raster/ICO image: %s", exc)
+        logger.warning("Favicon bytes are not a decodable raster/ICO image: %s", exc)
         return None
     try:
         return _image_to_ico_bytes(im), ".ico"
     except Exception as exc:
-        logger.warning("Failed to encode avatar as ICO: %s", exc)
+        logger.warning("Failed to encode favicon as ICO: %s", exc)
         return None
 
 
-def build_avatar_filename(domain: str, source_identity: str, extension: str) -> str:
+def build_favicon_filename(domain: str, source_identity: str, extension: str) -> str:
     normalized_domain = domain.strip().lower().split("?", 1)[0]
     safe_domain = re.sub(r"[^a-zA-Z0-9-]", "_", normalized_domain) or "unknown"
     url_hash = hashlib.sha256(source_identity.encode("utf-8")).hexdigest()[:16]

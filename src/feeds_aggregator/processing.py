@@ -74,7 +74,7 @@ def build_processed_output(
 
 def normalize_document(document: RawFeedDocument, *, timezone_name: str) -> list[ProcessedItem]:
     name = choose_source_name(document)
-    avatar = choose_avatar(document)
+    favicon = choose_favicon(document)
     feed_domain = determine_feed_domain(document)
     source_key = document.source.source_url
     source_homepage = normalize_http_url(document.homepage_url)
@@ -93,7 +93,7 @@ def normalize_document(document: RawFeedDocument, *, timezone_name: str) -> list
                 link=entry.link.strip(),
                 published=format_datetime(published_dt, timezone=timezone),
                 name=name,
-                avatar=avatar,
+                favicon=favicon,
                 feed_domain=feed_domain,
                 source_key=source_key,
                 source_homepage=source_homepage,
@@ -110,10 +110,10 @@ def choose_source_name(document: RawFeedDocument) -> str:
     return "Unknown Source"
 
 
-def choose_avatar(document: RawFeedDocument) -> str | None:
-    explicit_avatar = normalize_http_url(document.avatar)
-    if explicit_avatar:
-        return explicit_avatar
+def choose_favicon(document: RawFeedDocument) -> str | None:
+    explicit = normalize_http_url(document.favicon)
+    if explicit:
+        return explicit
     return None
 
 

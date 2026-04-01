@@ -29,7 +29,7 @@ class RawFeedDocument:
     source: FeedSource
     title: str | None
     entries: list[RawFeedEntry]
-    avatar: str | None = None
+    favicon: str | None = None
     homepage_url: str | None = None
 
 
@@ -67,7 +67,7 @@ class ProcessedItem:
     link: str
     published: str
     name: str
-    avatar: str | None = None
+    favicon: str | None = None
     feed_domain: str | None = None
     source_key: str | None = None
     source_homepage: str | None = None

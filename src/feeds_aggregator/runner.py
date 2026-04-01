@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from .aggregator import AggregationConfig, fetch_and_parse_source, resolve_worker_count
 from .models import AggregationResult, FeedSource, ProcessedItem, RawFeedDocument, SourceAggregationFailure
-from .output_writer import persist_item_avatars
+from .output_writer import persist_item_favicons
 from .processing import ProcessingConfig, process_document, should_stop_after_limit
 
 SourceProcessingResult = tuple[RawFeedDocument, list[ProcessedItem]]
@@ -17,8 +17,8 @@ def process_sources_to_items(
     aggregation_config: AggregationConfig,
     processing_config: ProcessingConfig,
     output_path: str,
-    avatar_dir: str | None,
-    avatar_delay_ms: int,
+    favicon_dir: str | None,
+    favicon_delay_ms: int,
 ) -> tuple[AggregationResult, list[ProcessedItem]]:
     if not sources:
         return AggregationResult(), []
@@ -44,8 +44,8 @@ def process_sources_to_items(
                 aggregation_config=aggregation_config,
                 processing_config=processing_config,
                 output_path=output_path,
-                avatar_dir=avatar_dir,
-                avatar_delay_ms=avatar_delay_ms,
+                favicon_dir=favicon_dir,
+                favicon_delay_ms=favicon_delay_ms,
             )
             future_to_source[future] = source
             return True
@@ -83,19 +83,19 @@ def process_single_source(
     aggregation_config: AggregationConfig,
     processing_config: ProcessingConfig,
     output_path: str,
-    avatar_dir: str | None,
-    avatar_delay_ms: int,
+    favicon_dir: str | None,
+    favicon_delay_ms: int,
 ) -> SourceProcessingResult:
     document = fetch_and_parse_source(source, aggregation_config)
     now = processing_config.now or datetime.now(UTC)
     items = process_document(document, config=processing_config, now=now)
-    persisted_items = persist_item_avatars(
+    persisted_items = persist_item_favicons(
         items,
         output_path=output_path,
-        avatar_dir=avatar_dir,
+        favicon_dir=favicon_dir,
         timeout_seconds=max(1.0, aggregation_config.timeout_seconds),
         workers=1,
-        delay_ms=avatar_delay_ms,
+        delay_ms=favicon_delay_ms,
     )
     return document, persisted_items
 

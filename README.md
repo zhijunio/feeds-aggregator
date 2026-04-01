@@ -21,13 +21,13 @@ PYTHONPATH=src python3 -m feeds_aggregator.cli --sources data/rss.txt --output d
 - `--output`：输出结果文件路径，默认 `data/feeds.json`
 - `--workers`：并发抓取数，默认 `8`
 - `--timeout`：单个来源请求超时秒数，默认 `15`
-- `--avatar-delay-ms`：avatar 发现和下载请求之间的延迟毫秒数，默认 `200`
+- `--favicon-delay-ms`：favicon 发现和下载请求之间的延迟毫秒数，默认 `200`
 - `--max-items-per-source`：每个来源最多保留几条，默认 `10`
 - `--max-total-items`：最终结果最多保留几条，默认 `0` 表示不限制
 - `--max-days`：仅保留最近多少天内容，默认 `0` 表示不限制
 - `--timezone`：输出时间使用的 IANA 时区，默认 `UTC`
-- `--avatar-dir`：avatar 图片本地保存目录，默认 `<output-dir>/favicons`
-- `--avatar-public-prefix`：可选，写入 JSON 时在本地文件名前加根相对前缀（如 `/favicons`）；默认空，仅输出文件名
+- `--favicon-dir`：favicon 图片本地保存目录，默认 `<output-dir>/favicons`
+- `--favicon-public-prefix`：可选，写入 JSON 时在本地文件名前加根相对前缀（如 `/favicons`）；默认空，仅输出文件名
 - `--failure-log`：可选，把失败源详情写入一个 JSON 文件
 - `--validate-only`：只校验输入和配置，不抓取 feed，也不写输出文件
 
@@ -64,7 +64,7 @@ https://another.com/rss.xml
       "link": "https://example.com/post",
       "published": "2026-03-13 10:00:00",
       "name": "@Example Blog",
-      "avatar": null
+      "favicon": null
     }
   ],
   "updated": "2026-03-13 12:00:00"
@@ -80,7 +80,7 @@ PYTHONPATH=src python3 -m feeds_aggregator.cli \
   --sources data/rss.txt \
   --output data/feeds.json \
   --workers 8 \
-  --avatar-delay-ms 300 \
+  --favicon-delay-ms 300 \
   --max-total-items 200 \
   --max-items-per-source 3 \
   --timezone Asia/Shanghai
@@ -103,7 +103,7 @@ PYTHONPATH=src python3 -m feeds_aggregator.cli \
   "successful_sources": 10,
   "failed_sources": 2,
   "output_items": 48,
-  "downloaded_avatars": 9,
+  "downloaded_favicons": 9,
   "duration_seconds": 3.214,
   "output_path": "data/feeds.json",
   "failure_log_path": "data/failures.json",
@@ -154,7 +154,7 @@ jobs:
         with:
           sources: data/rss.txt
           output: data/feeds.json
-          avatar-delay-ms: 300
+          favicon-delay-ms: 300
           max-items-per-source: 20
           max-days: 30
 ```

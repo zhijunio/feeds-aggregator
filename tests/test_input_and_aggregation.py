@@ -191,7 +191,7 @@ class InputAndAggregationTests(unittest.TestCase):
         self.assertEqual(1, len(result.successes))
         self.assertEqual(1, len(result.failures))
         self.assertEqual(1, result.total_entries)
-        self.assertEqual("https://example.com/rss-avatar.png", result.successes[0].avatar)
+        self.assertEqual("https://example.com/rss-avatar.png", result.successes[0].favicon)
 
     def test_aggregate_sources_parses_atom_avatar(self):
         sources = [
@@ -203,7 +203,7 @@ class InputAndAggregationTests(unittest.TestCase):
 
         self.assertEqual("success", result.outcome)
         self.assertEqual(1, len(result.successes))
-        self.assertEqual("https://example.com/atom-avatar.png", result.successes[0].avatar)
+        self.assertEqual("https://example.com/atom-avatar.png", result.successes[0].favicon)
 
     def test_parse_feed_xml_normalizes_feed_homepage_link_to_site_root(self):
         document = parse_feed_xml(

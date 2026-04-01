@@ -20,11 +20,11 @@ from feeds_aggregator.errors import InputValidationError
 from feeds_aggregator.failure_log import write_failure_log
 from feeds_aggregator.models import AggregationResult, FeedSource, InputLoadResult, ProcessedItem, ProcessedOutput, RawFeedDocument, RawFeedEntry, SourceAggregationFailure
 from feeds_aggregator.output_writer import (
-    build_avatar_filename,
+    build_favicon_filename,
     build_browser_page_request,
-    format_avatar_public_path,
-    persist_avatars,
-    prepare_avatar_payload,
+    format_favicon_public_path,
+    persist_favicons,
+    prepare_favicon_payload,
     write_output_file,
 )
 from feeds_aggregator.processing import ProcessingConfig
@@ -92,7 +92,7 @@ class OutputAndReportingTests(unittest.TestCase):
             '"successful_sources"',
             '"failed_sources"',
             '"output_items"',
-            '"downloaded_avatars"',
+            '"downloaded_favicons"',
             '"duration_seconds"',
             '"output_path"',
             '"failure_log_path"',
@@ -133,7 +133,7 @@ class OutputAndReportingTests(unittest.TestCase):
         self.assertEqual(0, args.max_total_items)
         self.assertEqual(0, args.max_days)
         self.assertEqual("UTC", args.timezone)
-        self.assertEqual(200, args.avatar_delay_ms)
+        self.assertEqual(200, args.favicon_delay_ms)
 
     def test_configure_logging_uses_timestamped_format(self):
         with patch("feeds_aggregator.cli.logging.basicConfig") as mocked_basic_config:
@@ -194,12 +194,12 @@ class OutputAndReportingTests(unittest.TestCase):
 
         self.assertEqual("data/failures.json", args.failure_log)
 
-    def test_cli_parser_supports_avatar_delay_ms(self):
+    def test_cli_parser_supports_favicon_delay_ms(self):
         parser = build_parser()
 
-        args = parser.parse_args(["--sources", "data/rss.txt", "--avatar-delay-ms", "300"])
+        args = parser.parse_args(["--sources", "data/rss.txt", "--favicon-delay-ms", "300"])
 
-        self.assertEqual(300, args.avatar_delay_ms)
+        self.assertEqual(300, args.favicon_delay_ms)
 
     def test_write_output_file_creates_expected_json(self):
         output = ProcessedOutput(
@@ -209,7 +209,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=None,
+                    favicon=None,
                 )
             ],
             updated="2026-03-13 12:00:00",
@@ -234,7 +234,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="@Example",
-                    avatar=None,
+                    favicon=None,
                 )
             ],
             updated="2026-03-13 12:00:00",
@@ -247,7 +247,7 @@ class OutputAndReportingTests(unittest.TestCase):
 
         self.assertEqual("@Example", payload["items"][0]["name"])
 
-    def test_write_output_file_prepends_avatar_public_prefix(self):
+    def test_write_output_file_prepends_favicon_public_prefix(self):
         output = ProcessedOutput(
             items=[
                 ProcessedItem(
@@ -255,7 +255,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar="foo_example_com_abc.ico",
+                    favicon="foo_example_com_abc.ico",
                 )
             ],
             updated="2026-03-13 12:00:00",
@@ -263,28 +263,28 @@ class OutputAndReportingTests(unittest.TestCase):
 
         with TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "feeds.json"
-            write_output_file(output, path, avatar_public_prefix="/images/_favicons")
+            write_output_file(output, path, favicon_public_prefix="/images/_favicons")
             payload = json.loads(path.read_text(encoding="utf-8"))
 
         self.assertEqual(
             "/images/_favicons/foo_example_com_abc.ico",
-            payload["items"][0]["avatar"],
+            payload["items"][0]["favicon"],
         )
 
-    def test_format_avatar_public_path_skips_absolute_and_root_relative(self):
+    def test_format_favicon_public_path_skips_absolute_and_root_relative(self):
         self.assertEqual(
             "https://cdn.example/x.png",
-            format_avatar_public_path(
+            format_favicon_public_path(
                 "https://cdn.example/x.png", public_prefix="/images/_favicons"
             ),
         )
         self.assertEqual(
             "/images/other/x.png",
-            format_avatar_public_path(
+            format_favicon_public_path(
                 "/images/other/x.png", public_prefix="/images/_favicons"
             ),
         )
-        self.assertIsNone(format_avatar_public_path(None, public_prefix="/x"))
+        self.assertIsNone(format_favicon_public_path(None, public_prefix="/x"))
 
     def test_build_summary_payload_lists_failed_feed_urls(self):
         source = FeedSource(source_url="https://example.com/feed.xml")
@@ -303,7 +303,7 @@ class OutputAndReportingTests(unittest.TestCase):
 
         self.assertEqual(["https://example.com/feed.xml"], payload["failed_feed_urls"])
         self.assertEqual("data/failures.json", payload["failure_log_path"])
-        self.assertEqual(0, payload["downloaded_avatars"])
+        self.assertEqual(0, payload["downloaded_favicons"])
         self.assertNotIn("format", payload)
         self.assertEqual("failure", payload["outcome"])
 
@@ -314,7 +314,7 @@ class OutputAndReportingTests(unittest.TestCase):
             link="https://example.com/post",
             published="2026-03-13 10:00:00",
             name="Example",
-            avatar=None,
+            favicon=None,
         )
         aggregation = AggregationResult(successes=[RawFeedDocument(source=source, title="Feed", entries=[])])
         processed_output = ProcessedOutput(items=[item], updated="2026-03-13 12:00:00")
@@ -340,16 +340,16 @@ class OutputAndReportingTests(unittest.TestCase):
         self.assertEqual("data/feeds.json", result.output_path)
         self.assertIsNone(result.output_error)
         self.assertEqual(1, result.report.output_items)
-        self.assertEqual(0, result.report.downloaded_avatars)
+        self.assertEqual(0, result.report.downloaded_favicons)
 
-    def test_run_aggregation_passes_avatar_delay_ms_to_runner(self):
+    def test_run_aggregation_passes_favicon_delay_ms_to_runner(self):
         source = FeedSource(source_url="https://example.com/feed.xml")
         item = ProcessedItem(
             title="Post",
             link="https://example.com/post",
             published="2026-03-13 10:00:00",
             name="Example",
-            avatar=None,
+            favicon=None,
         )
         aggregation = AggregationResult(successes=[RawFeedDocument(source=source, title="Feed", entries=[])])
         processed_output = ProcessedOutput(items=[item], updated="2026-03-13 12:00:00")
@@ -368,11 +368,11 @@ class OutputAndReportingTests(unittest.TestCase):
                     max_total_items=0,
                     max_days=180,
                     timezone_name="UTC",
-                    avatar_delay_ms=300,
+                    favicon_delay_ms=300,
                 )
             )
 
-        self.assertEqual(300, mocked_process.call_args.kwargs["avatar_delay_ms"])
+        self.assertEqual(300, mocked_process.call_args.kwargs["favicon_delay_ms"])
 
     def test_run_aggregation_shuffles_sources_before_processing(self):
         source_a = FeedSource(source_url="https://example.com/a.xml")
@@ -412,7 +412,7 @@ class OutputAndReportingTests(unittest.TestCase):
             link="https://example.com/post",
             published="2026-03-13 10:00:00",
             name="Example",
-            avatar=None,
+            favicon=None,
         )
         aggregation = AggregationResult(successes=[RawFeedDocument(source=source, title="Feed", entries=[])])
         processed_output = ProcessedOutput(items=[item], updated="2026-03-13 12:00:00")
@@ -546,7 +546,7 @@ class OutputAndReportingTests(unittest.TestCase):
             link="https://example.com/post",
             published="2026-03-13 10:00:00",
             name="Example",
-            avatar=None,
+            favicon=None,
         )
         written_output = ProcessedOutput(items=[item], updated="2026-03-13 12:00:00")
         stdout_buffer = io.StringIO()
@@ -574,7 +574,7 @@ class OutputAndReportingTests(unittest.TestCase):
         self.assertEqual("success", payload["outcome"])
         self.assertEqual("data/feeds.json", payload["output_path"])
         self.assertEqual(1, payload["output_items"])
-        self.assertEqual(0, payload["downloaded_avatars"])
+        self.assertEqual(0, payload["downloaded_favicons"])
         self.assertFalse(payload["validated_only"])
         self.assertEqual("", stderr_buffer.getvalue())
 
@@ -601,7 +601,7 @@ class OutputAndReportingTests(unittest.TestCase):
             successful_sources=0,
             failed_sources=0,
             output_items=0,
-            downloaded_avatars=0,
+            downloaded_favicons=0,
             duration_seconds=0.1,
             failures=[],
         )
@@ -626,7 +626,7 @@ class OutputAndReportingTests(unittest.TestCase):
         payload = json.loads(stdout_buffer.getvalue())
         self.assertTrue(payload["validated_only"])
         self.assertIsNone(payload["output_path"])
-        self.assertEqual(0, payload["downloaded_avatars"])
+        self.assertEqual(0, payload["downloaded_favicons"])
         self.assertEqual("", stderr_buffer.getvalue())
 
     def test_main_returns_failure_when_output_write_fails(self):
@@ -637,7 +637,7 @@ class OutputAndReportingTests(unittest.TestCase):
             link="https://example.com/post",
             published="2026-03-13 10:00:00",
             name="Example",
-            avatar=None,
+            favicon=None,
         )
         processed_output = ProcessedOutput(items=[item], updated="2026-03-13 12:00:00")
         stdout_buffer = io.StringIO()
@@ -682,7 +682,7 @@ class OutputAndReportingTests(unittest.TestCase):
             link="https://example.com/post",
             published="2026-03-13 10:00:00",
             name="Example",
-            avatar=None,
+            favicon=None,
             feed_domain="example.com",
             source_key="https://example.com/feed-a.xml",
         )
@@ -693,15 +693,15 @@ class OutputAndReportingTests(unittest.TestCase):
                 aggregation_config=AggregationConfig(workers=1),
                 processing_config=ProcessingConfig(max_total_items=1),
                 output_path="data/feeds.json",
-                avatar_dir=None,
-                avatar_delay_ms=0,
+                favicon_dir=None,
+                favicon_delay_ms=0,
             )
 
         self.assertEqual(1, mocked_process.call_count)
         self.assertEqual(1, len(aggregation.successes))
         self.assertEqual(1, len(source_items))
 
-    def test_persist_avatars_saves_favicon_file_with_expected_name(self):
+    def test_persist_favicons_saves_favicon_file_with_expected_name(self):
         avatar_url = "https://cdn.example.com/images/logo.png?size=64"
         output = ProcessedOutput(
             items=[
@@ -710,7 +710,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=avatar_url,
+                    favicon=avatar_url,
                     feed_domain="feeds.example.com",
                     source_key="https://example.com/feed.xml",
                 )
@@ -721,17 +721,17 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(_tiny_png_bytes())):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
             expected_name = f"feeds_example_com_{avatar_hash}.ico"
-            expected_file = output_path.parent / "avatars" / expected_name
+            expected_file = output_path.parent / "favicons" / expected_name
 
-            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertEqual(expected_name, persisted.items[0].favicon)
             self.assertTrue(expected_file.exists())
             self.assertTrue(expected_file.read_bytes().startswith(_ICO_MAGIC))
 
-    def test_persist_avatars_uses_svg_suffix_when_png_url_returns_svg_body(self):
+    def test_persist_favicons_uses_svg_suffix_when_png_url_returns_svg_body(self):
         avatar_url = "https://cdn.example.com/favicon.png?v=1"
         svg_body = b'<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"></svg>'
         output = ProcessedOutput(
@@ -741,7 +741,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=avatar_url,
+                    favicon=avatar_url,
                     feed_domain="feeds.example.com",
                     source_key="https://example.com/feed.xml",
                 )
@@ -755,25 +755,25 @@ class OutputAndReportingTests(unittest.TestCase):
                 "feeds_aggregator.output_writer.urlopen",
                 return_value=MockHttpResponse(svg_body, content_type="image/png"),
             ):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
             expected_name = f"feeds_example_com_{avatar_hash}.svg"
-            expected_file = output_path.parent / "avatars" / expected_name
+            expected_file = output_path.parent / "favicons" / expected_name
 
-            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertEqual(expected_name, persisted.items[0].favicon)
             self.assertTrue(expected_file.exists())
             self.assertEqual(svg_body, expected_file.read_bytes())
 
-    def test_prepare_avatar_payload_prefers_svg_sniff(self):
+    def test_prepare_favicon_payload_prefers_svg_sniff(self):
         svg_body = b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>"
-        prepared = prepare_avatar_payload(svg_body)
+        prepared = prepare_favicon_payload(svg_body)
         self.assertIsNotNone(prepared)
         out, ext = prepared
         self.assertEqual(".svg", ext)
         self.assertEqual(svg_body, out)
 
-    def test_persist_avatars_supports_custom_dir(self):
+    def test_persist_favicons_supports_custom_dir(self):
         avatar_url = "https://img.example.org/icons/site.ico"
         output = ProcessedOutput(
             items=[
@@ -782,7 +782,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=avatar_url,
+                    favicon=avatar_url,
                     feed_domain="feeds.example.com",
                     source_key="https://example.com/feed.xml",
                 )
@@ -792,24 +792,24 @@ class OutputAndReportingTests(unittest.TestCase):
 
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "data" / "feeds.json"
-            avatar_dir = Path(tmpdir) / "custom_avatars"
+            favicon_dir = Path(tmpdir) / "custom_favicons"
             with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(_tiny_ico_bytes(), content_type="image/x-icon")):
-                persisted = persist_avatars(
+                persisted = persist_favicons(
                     output,
                     output_path=output_path,
-                    avatar_dir=avatar_dir,
+                    favicon_dir=favicon_dir,
                     timeout_seconds=1.0,
                 )
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
             expected_name = f"feeds_example_com_{avatar_hash}.ico"
-            expected_file = avatar_dir / expected_name
+            expected_file = favicon_dir / expected_name
 
-            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertEqual(expected_name, persisted.items[0].favicon)
             self.assertTrue(expected_file.exists())
             self.assertTrue(expected_file.read_bytes().startswith(_ICO_MAGIC))
 
-    def test_persist_avatars_waits_before_requests_when_delay_configured(self):
+    def test_persist_favicons_waits_before_requests_when_delay_configured(self):
         avatar_url = "https://cdn.example.com/images/logo.png?size=64"
         output = ProcessedOutput(
             items=[
@@ -818,7 +818,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=avatar_url,
+                    favicon=avatar_url,
                     feed_domain="feeds.example.com",
                     source_key="https://example.com/feed.xml",
                 )
@@ -830,12 +830,12 @@ class OutputAndReportingTests(unittest.TestCase):
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.sleep") as mocked_sleep:
                 with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(_tiny_png_bytes())):
-                    persist_avatars(output, output_path=output_path, timeout_seconds=1.0, delay_ms=250)
+                    persist_favicons(output, output_path=output_path, timeout_seconds=1.0, delay_ms=250)
 
         mocked_sleep.assert_called()
         self.assertEqual(0.25, mocked_sleep.call_args.args[0])
 
-    def test_persist_avatars_retries_avatar_download_once_after_timeout(self):
+    def test_persist_favicons_retries_avatar_download_once_after_timeout(self):
         avatar_url = "https://cdn.example.com/images/logo.png?size=64"
         output = ProcessedOutput(
             items=[
@@ -844,7 +844,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=avatar_url,
+                    favicon=avatar_url,
                     feed_domain="feeds.example.com",
                     source_key="https://example.com/feed.xml",
                 )
@@ -858,15 +858,15 @@ class OutputAndReportingTests(unittest.TestCase):
                 "feeds_aggregator.output_writer.urlopen",
                 side_effect=[TimeoutError("timed out"), MockHttpResponse(_tiny_png_bytes())],
             ) as mocked_urlopen:
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0, delay_ms=0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0, delay_ms=0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
             expected_name = f"feeds_example_com_{avatar_hash}.ico"
 
-            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertEqual(expected_name, persisted.items[0].favicon)
             self.assertEqual(2, mocked_urlopen.call_count)
 
-    def test_persist_avatars_reuses_existing_file_without_downloading(self):
+    def test_persist_favicons_reuses_existing_file_without_downloading(self):
         avatar_url = "https://cdn.example.com/images/logo.png?size=64"
         output = ProcessedOutput(
             items=[
@@ -875,7 +875,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=avatar_url,
+                    favicon=avatar_url,
                     feed_domain="feeds.example.com",
                     source_key="https://example.com/feed.xml",
                 )
@@ -885,21 +885,21 @@ class OutputAndReportingTests(unittest.TestCase):
 
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
-            avatar_dir = output_path.parent / "avatars"
-            avatar_dir.mkdir(parents=True, exist_ok=True)
+            favicon_dir = output_path.parent / "favicons"
+            favicon_dir.mkdir(parents=True, exist_ok=True)
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
             expected_name = f"feeds_example_com_{avatar_hash}.png"
-            expected_file = avatar_dir / expected_name
+            expected_file = favicon_dir / expected_name
             expected_file.write_bytes(b"EXISTING")
 
             with patch("feeds_aggregator.output_writer.urlopen") as mocked_urlopen:
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
-            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertEqual(expected_name, persisted.items[0].favicon)
             self.assertEqual(b"EXISTING", expected_file.read_bytes())
             mocked_urlopen.assert_not_called()
 
-    def test_persist_avatars_keeps_remote_url_when_download_fails(self):
+    def test_persist_favicons_keeps_remote_url_when_download_fails(self):
         avatar_url = "https://cdn.example.com/images/logo.png"
         output = ProcessedOutput(
             items=[
@@ -908,7 +908,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=avatar_url,
+                    favicon=avatar_url,
                     feed_domain="feeds.example.com",
                 )
             ],
@@ -918,11 +918,11 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", side_effect=OSError("network down")):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
-        self.assertEqual(avatar_url, persisted.items[0].avatar)
+        self.assertEqual(avatar_url, persisted.items[0].favicon)
 
-    def test_persist_avatars_discovers_icon_from_page_link(self):
+    def test_persist_favicons_discovers_icon_from_page_link(self):
         output = ProcessedOutput(
             items=[
                 ProcessedItem(
@@ -930,7 +930,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=None,
+                    favicon=None,
                     feed_domain="feeds.example.com",
                     source_key="https://example.com/feed.xml",
                 )
@@ -947,14 +947,14 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", side_effect=[html_response, image_response]):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
             expected_name = f"feeds_example_com_{avatar_hash}.ico"
 
-            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertEqual(expected_name, persisted.items[0].favicon)
 
-    def test_persist_avatars_prefers_source_homepage_over_entry_link(self):
+    def test_persist_favicons_prefers_source_homepage_over_entry_link(self):
         output = ProcessedOutput(
             items=[
                 ProcessedItem(
@@ -962,7 +962,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=None,
+                    favicon=None,
                     feed_domain="feeds.example.com",
                     source_key="https://example.com/feed.xml",
                     source_homepage="https://example.com/",
@@ -987,16 +987,16 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", side_effect=fake_urlopen):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
             expected_name = f"feeds_example_com_{avatar_hash}.ico"
 
-            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertEqual(expected_name, persisted.items[0].favicon)
             self.assertEqual("https://example.com/", requested_urls[0])
             self.assertNotEqual("https://example.com/post", requested_urls[0])
 
-    def test_persist_avatars_discovers_image_src_avatar_from_youtube_channel_page(self):
+    def test_persist_favicons_discovers_image_src_avatar_from_youtube_channel_page(self):
         output = ProcessedOutput(
             items=[
                 ProcessedItem(
@@ -1004,7 +1004,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://www.youtube.com/watch?v=abc123",
                     published="2026-03-13 10:00:00",
                     name="YouTube Channel",
-                    avatar=None,
+                    favicon=None,
                     feed_domain="www.youtube.com",
                     source_key="https://www.youtube.com/feeds/videos.xml?channel_id=abc",
                 )
@@ -1013,7 +1013,7 @@ class OutputAndReportingTests(unittest.TestCase):
         )
 
         html_response = MockHttpResponse(
-            b"<html><head><link rel=\"image_src\" href=\"https://yt3.googleusercontent.com/channel-avatar=s900-c-k-c0x00ffffff-no-rj\"></head></html>",
+            b"<html><head><link rel=\"image_src\" href=\"https://yt3.googleusercontent.com/channel-favicon=s900-c-k-c0x00ffffff-no-rj\"></head></html>",
             content_type="text/html",
         )
         image_response = MockHttpResponse(_tiny_jpeg_bytes(), content_type="image/jpeg")
@@ -1029,19 +1029,19 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", side_effect=fake_urlopen):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://www.youtube.com/feeds/videos.xml?channel_id=abc".encode("utf-8")).hexdigest()[:16]
             expected_name = f"www_youtube_com_{avatar_hash}.ico"
 
-            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertEqual(expected_name, persisted.items[0].favicon)
             self.assertEqual("https://www.youtube.com/channel/abc", requested_urls[0])
             self.assertEqual(
-                "https://yt3.googleusercontent.com/channel-avatar=s900-c-k-c0x00ffffff-no-rj",
+                "https://yt3.googleusercontent.com/channel-favicon=s900-c-k-c0x00ffffff-no-rj",
                 requested_urls[1],
             )
 
-    def test_persist_avatars_discovers_twitter_image_avatar_from_youtube_channel_page(self):
+    def test_persist_favicons_discovers_twitter_image_avatar_from_youtube_channel_page(self):
         output = ProcessedOutput(
             items=[
                 ProcessedItem(
@@ -1049,7 +1049,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://www.youtube.com/watch?v=abc123",
                     published="2026-03-13 10:00:00",
                     name="YouTube Channel",
-                    avatar=None,
+                    favicon=None,
                     feed_domain="www.youtube.com",
                     source_key="https://www.youtube.com/feeds/videos.xml?channel_id=abc",
                 )
@@ -1074,19 +1074,19 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", side_effect=fake_urlopen):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://www.youtube.com/feeds/videos.xml?channel_id=abc".encode("utf-8")).hexdigest()[:16]
             expected_name = f"www_youtube_com_{avatar_hash}.ico"
 
-            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertEqual(expected_name, persisted.items[0].favicon)
             self.assertEqual("https://www.youtube.com/channel/abc", requested_urls[0])
             self.assertEqual(
                 "https://yt3.googleusercontent.com/channel-avatar-meta=s900-c-k-c0x00ffffff-no-rj",
                 requested_urls[1],
             )
 
-    def test_persist_avatars_prefers_youtube_channel_avatar_over_site_icon(self):
+    def test_persist_favicons_prefers_youtube_channel_avatar_over_site_icon(self):
         output = ProcessedOutput(
             items=[
                 ProcessedItem(
@@ -1094,7 +1094,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://www.youtube.com/watch?v=abc123",
                     published="2026-03-13 10:00:00",
                     name="YouTube Channel",
-                    avatar=None,
+                    favicon=None,
                     feed_domain="www.youtube.com",
                     source_key="https://www.youtube.com/feeds/videos.xml?channel_id=abc",
                 )
@@ -1121,19 +1121,19 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", side_effect=fake_urlopen):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://www.youtube.com/feeds/videos.xml?channel_id=abc".encode("utf-8")).hexdigest()[:16]
             expected_name = f"www_youtube_com_{avatar_hash}.ico"
 
-            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertEqual(expected_name, persisted.items[0].favicon)
             self.assertEqual("https://www.youtube.com/channel/abc", requested_urls[0])
             self.assertEqual(
                 "https://yt3.googleusercontent.com/channel-avatar-meta=s900-c-k-c0x00ffffff-no-rj",
                 requested_urls[1],
             )
 
-    def test_persist_avatars_prefers_icon_over_twitter_image(self):
+    def test_persist_favicons_prefers_icon_over_twitter_image(self):
         output = ProcessedOutput(
             items=[
                 ProcessedItem(
@@ -1141,7 +1141,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=None,
+                    favicon=None,
                     feed_domain="example.com",
                     source_key="https://example.com/feed.xml",
                     source_homepage="https://example.com/",
@@ -1169,16 +1169,16 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", side_effect=fake_urlopen):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
             expected_name = f"example_com_{avatar_hash}.ico"
 
-            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertEqual(expected_name, persisted.items[0].favicon)
             self.assertEqual("https://example.com/", requested_urls[0])
             self.assertEqual("https://example.com/favicon.ico", requested_urls[1])
 
-    def test_persist_avatars_falls_back_to_next_candidate_when_icon_download_fails(self):
+    def test_persist_favicons_falls_back_to_next_candidate_when_icon_download_fails(self):
         output = ProcessedOutput(
             items=[
                 ProcessedItem(
@@ -1186,7 +1186,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=None,
+                    favicon=None,
                     feed_domain="example.com",
                     source_key="https://example.com/feed.xml",
                     source_homepage="https://example.com/",
@@ -1217,17 +1217,17 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", side_effect=fake_urlopen):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
             expected_name = f"example_com_{avatar_hash}.ico"
 
-            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertEqual(expected_name, persisted.items[0].favicon)
             self.assertEqual("https://example.com/", requested_urls[0])
             self.assertEqual("https://example.com/favicon.ico", requested_urls[1])
             self.assertEqual("https://cdn.example.com/meta-avatar.jpg", requested_urls[2])
 
-    def test_persist_avatars_leaves_avatar_empty_when_page_has_no_icon(self):
+    def test_persist_favicons_leaves_avatar_empty_when_page_has_no_icon(self):
         output = ProcessedOutput(
             items=[
                 ProcessedItem(
@@ -1235,7 +1235,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=None,
+                    favicon=None,
                     feed_domain="feeds.example.com",
                 )
             ],
@@ -1247,11 +1247,11 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", return_value=html_response):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
-        self.assertIsNone(persisted.items[0].avatar)
+        self.assertIsNone(persisted.items[0].favicon)
 
-    def test_persist_avatars_falls_back_to_favicon_when_page_request_is_forbidden(self):
+    def test_persist_favicons_falls_back_to_favicon_when_page_request_is_forbidden(self):
         output = ProcessedOutput(
             items=[
                 ProcessedItem(
@@ -1259,7 +1259,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=None,
+                    favicon=None,
                     feed_domain="feeds.example.com",
                     source_key="https://example.com/feed.xml",
                     source_homepage="https://example.com/",
@@ -1283,16 +1283,16 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", side_effect=fake_urlopen):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
             expected_name = f"feeds_example_com_{avatar_hash}.ico"
 
-            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertEqual(expected_name, persisted.items[0].favicon)
             self.assertEqual("https://example.com/", requested_urls[0])
             self.assertEqual("https://example.com/favicon.ico", requested_urls[1])
 
-    def test_persist_avatars_leaves_avatar_empty_when_favicon_fallback_missing(self):
+    def test_persist_favicons_leaves_avatar_empty_when_favicon_fallback_missing(self):
         output = ProcessedOutput(
             items=[
                 ProcessedItem(
@@ -1300,7 +1300,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=None,
+                    favicon=None,
                     feed_domain="feeds.example.com",
                     source_key="https://example.com/feed.xml",
                     source_homepage="https://example.com/",
@@ -1321,13 +1321,13 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", side_effect=fake_urlopen):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
-        self.assertIsNone(persisted.items[0].avatar)
+        self.assertIsNone(persisted.items[0].favicon)
         self.assertEqual("https://example.com/", requested_urls[0])
         self.assertEqual("https://example.com/favicon.ico", requested_urls[1])
 
-    def test_persist_avatars_discovers_once_per_feed_source(self):
+    def test_persist_favicons_discovers_once_per_feed_source(self):
         output = ProcessedOutput(
             items=[
                 ProcessedItem(
@@ -1335,7 +1335,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post-a",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=None,
+                    favicon=None,
                     feed_domain="feeds.example.com",
                     source_key="https://feeds.example.com/feed.xml",
                 ),
@@ -1344,7 +1344,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post-b",
                     published="2026-03-13 09:00:00",
                     name="Example",
-                    avatar=None,
+                    favicon=None,
                     feed_domain="feeds.example.com",
                     source_key="https://feeds.example.com/feed.xml",
                 ),
@@ -1361,13 +1361,13 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", side_effect=[html_response, image_response]) as mocked_urlopen:
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
         self.assertEqual(2, len(persisted.items))
-        self.assertEqual(persisted.items[0].avatar, persisted.items[1].avatar)
+        self.assertEqual(persisted.items[0].favicon, persisted.items[1].favicon)
         self.assertEqual(2, mocked_urlopen.call_count)
 
-    def test_persist_avatars_uses_hostname_without_port_in_filename(self):
+    def test_persist_favicons_uses_hostname_without_port_in_filename(self):
         avatar_url = "https://cdn.example.com:8443/images/logo.png?size=64"
         output = ProcessedOutput(
             items=[
@@ -1376,7 +1376,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post",
                     published="2026-03-13 10:00:00",
                     name="Example",
-                    avatar=avatar_url,
+                    favicon=avatar_url,
                     feed_domain="feeds.example.com",
                     source_key="https://example.com/feed.xml",
                 )
@@ -1387,14 +1387,14 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(_tiny_png_bytes())):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash = hashlib.sha256("https://example.com/feed.xml".encode("utf-8")).hexdigest()[:16]
             expected_name = f"feeds_example_com_{avatar_hash}.ico"
 
-            self.assertEqual(expected_name, persisted.items[0].avatar)
+            self.assertEqual(expected_name, persisted.items[0].favicon)
 
-    def test_persist_avatars_keeps_feed_domains_distinct_for_same_avatar_url(self):
+    def test_persist_favicons_keeps_feed_domains_distinct_for_same_avatar_url(self):
         avatar_url = "https://cdn.example.com/shared/logo.png"
         output = ProcessedOutput(
             items=[
@@ -1403,7 +1403,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post-a",
                     published="2026-03-13 10:00:00",
                     name="Example A",
-                    avatar=avatar_url,
+                    favicon=avatar_url,
                     feed_domain="feed-a.example.com",
                     source_key="https://example.com/feed-a.xml",
                 ),
@@ -1412,7 +1412,7 @@ class OutputAndReportingTests(unittest.TestCase):
                     link="https://example.com/post-b",
                     published="2026-03-13 10:00:00",
                     name="Example B",
-                    avatar=avatar_url,
+                    favicon=avatar_url,
                     feed_domain="feed-b.example.com",
                     source_key="https://example.com/feed-b.xml",
                 ),
@@ -1423,18 +1423,18 @@ class OutputAndReportingTests(unittest.TestCase):
         with TemporaryDirectory() as tmpdir:
             output_path = Path(tmpdir) / "feeds.json"
             with patch("feeds_aggregator.output_writer.urlopen", return_value=MockHttpResponse(_tiny_png_bytes())):
-                persisted = persist_avatars(output, output_path=output_path, timeout_seconds=1.0)
+                persisted = persist_favicons(output, output_path=output_path, timeout_seconds=1.0)
 
             avatar_hash_a = hashlib.sha256("https://example.com/feed-a.xml".encode("utf-8")).hexdigest()[:16]
             avatar_hash_b = hashlib.sha256("https://example.com/feed-b.xml".encode("utf-8")).hexdigest()[:16]
-            self.assertEqual(f"feed-a_example_com_{avatar_hash_a}.ico", persisted.items[0].avatar)
-            self.assertEqual(f"feed-b_example_com_{avatar_hash_b}.ico", persisted.items[1].avatar)
+            self.assertEqual(f"feed-a_example_com_{avatar_hash_a}.ico", persisted.items[0].favicon)
+            self.assertEqual(f"feed-b_example_com_{avatar_hash_b}.ico", persisted.items[1].favicon)
 
-    def test_build_avatar_filename_replaces_commas_with_underscores(self):
+    def test_build_favicon_filename_replaces_commas_with_underscores(self):
         source_identity = "https://example.com/feed.xml"
         avatar_hash = hashlib.sha256(source_identity.encode("utf-8")).hexdigest()[:16]
 
-        filename = build_avatar_filename("cdn,example.com", source_identity, ".png")
+        filename = build_favicon_filename("cdn,example.com", source_identity, ".png")
 
         self.assertEqual(f"cdn_example_com_{avatar_hash}.png", filename)
 
