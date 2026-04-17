@@ -81,7 +81,7 @@ jobs:
           python-version: 3.14
 
       - name: Run feeds-aggregator action
-        uses: chensoul/feeds-aggregator@main
+        uses: zhijunio/feeds-aggregator@main
         with:
           sources: ${{ inputs.sources }}
           output: ${{ inputs.output }}

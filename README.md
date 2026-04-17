@@ -150,7 +150,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: chensoul/feeds-aggregator@main
+      - uses: zhijunio/feeds-aggregator@main
         with:
           sources: data/rss.txt
           output: data/feeds.json
